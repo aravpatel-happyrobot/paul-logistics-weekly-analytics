@@ -15,7 +15,7 @@ import clickhouse_connect
 # from timezone_utils import get_time_filter, format_timestamp_for_display
 from datetime import datetime, timedelta, timezone
 
-from queries import carrier_asked_transfer_over_total_transfer_attempt_stats_query, carrier_asked_transfer_over_total_call_attempts_stats_query, calls_ending_in_each_call_stage_stats_query, load_not_found_stats_query, successfully_transferred_for_booking_stats_query
+from queries import carrier_asked_transfer_over_total_transfer_attempt_stats_query, carrier_asked_transfer_over_total_call_attempts_stats_query, calls_ending_in_each_call_stage_stats_query, load_not_found_stats_query, successfully_transferred_for_booking_stats_query, call_classication_stats_query, carrier_qualification_stats_query, pricing_stats_query
 
 logger = logging.getLogger(__name__)
 logger.setLevel(logging.INFO)
@@ -200,6 +200,24 @@ class SuccessfullyTransferredForBooking:
     successfully_transferred_for_booking_count: int
     total_calls: int
     successfully_transferred_for_booking_percentage: float
+
+@dataclass
+class CallClassificationStats:
+    call_classification: str
+    count: int
+    percentage: float
+
+@dataclass
+class CarrierQualificationStats:
+    carrier_qualification: str
+    count: int
+    percentage: float
+
+@dataclass
+class PricingStats:
+    pricing_notes: str
+    count: int
+    percentage: float
 
 
 @dataclass
@@ -732,3 +750,121 @@ def fetch_successfully_transferred_for_booking_stats(start_date: Optional[str] =
     except Exception as e:
         logger.exception("Error fetching successfully transferred for booking stats: %s", e)
         return None
+
+def fetch_call_classication_stats(start_date: Optional[str] = None, end_date: Optional[str] = None) -> Optional[CallClassificationStats]:
+    org_id = get_org_id()
+    if not org_id:
+        logger.error("❌ ORG_ID not found in environment variables. Please check your .env and restart the app.")
+        return None
+    
+    try:
+        date_filter = (
+            f"timestamp >= parseDateTime64BestEffort('{start_date}') AND timestamp < parseDateTime64BestEffort('{end_date}')"
+            if start_date and end_date
+            else "timestamp >= now() - INTERVAL 30 DAY"
+        )
+        
+        if start_date and end_date:
+            logger.info("Fetching call classification stats for date range: %s to %s", start_date, end_date)
+        else:
+            logger.info("Fetching call classification stats for last 30 days (no date range provided)")
+        query = call_classication_stats_query(date_filter, org_id, PEPSI_BROKER_NODE_ID)
+        
+        client = get_clickhouse_client()
+        rows = _json_each_row( client, query, settings={
+            "max_execution_time": 60,
+            "max_memory_usage": 2_000_000_000,
+            "max_threads": 4,
+        },
+    )
+        logger.info("Call classification stats query result: %d rows", len(rows))
+        if not rows:
+            logger.info
+            ("No call classification stats found")
+            return None
+        return [CallClassificationStats(
+            call_classification=str(r.get("call_classification") or "Unknown"),
+            count=int(r.get("count", 0)),
+            percentage=float(r.get("percentage", 0.0)),
+        ) for r in rows]
+    except Exception as e:
+        logger.exception("Error fetching call classification stats: %s", e)
+        return []
+
+def fetch_carrier_qualification_stats(start_date: Optional[str] = None, end_date: Optional[str] = None) -> Optional[CarrierQualificationStats]:
+    org_id = get_org_id()
+    if not org_id:
+        logger.error("❌ ORG_ID not found in environment variables. Please check your .env and restart the app.")
+        return None
+    
+    try:
+        date_filter = (
+            f"timestamp >= parseDateTime64BestEffort('{start_date}') AND timestamp < parseDateTime64BestEffort('{end_date}')"
+            if start_date and end_date
+            else "timestamp >= now() - INTERVAL 30 DAY"
+        )
+        
+        if start_date and end_date:
+            logger.info("Fetching carrier qualification stats for date range: %s to %s", start_date, end_date)
+        else:
+            logger.info("Fetching carrier qualification stats for last 30 days (no date range provided)")
+        query = carrier_qualification_stats_query(date_filter, org_id, PEPSI_BROKER_NODE_ID)
+        
+        client = get_clickhouse_client()
+        rows = _json_each_row( client, query, settings={
+            "max_execution_time": 60,
+            "max_memory_usage": 2_000_000_000,
+            "max_threads": 4,
+        },
+    )
+        logger.info("Carrier qualification stats query result: %d rows", len(rows))
+        if not rows:
+            logger.info("No carrier qualification stats found")
+            return None
+        return [CarrierQualificationStats(
+            carrier_qualification=str(r.get("carrier_qualification") or "Unknown"),
+            count=int(r.get("count", 0)), 
+            percentage=float(r.get("percentage", 0.0)),
+        ) for r in rows]
+    except Exception as e:
+        logger.exception("Error fetching carrier qualification stats: %s", e)
+        return []
+
+def fetch_pricing_stats(start_date: Optional[str] = None, end_date: Optional[str] = None) -> Optional[PricingStats]:
+    org_id = get_org_id()
+    if not org_id:
+        logger.error("❌ ORG_ID not found in environment variables. Please check your .env and restart the app.")
+        return None
+    
+    try:
+        date_filter = (
+            f"timestamp >= parseDateTime64BestEffort('{start_date}') AND timestamp < parseDateTime64BestEffort('{end_date}')"
+            if start_date and end_date
+            else "timestamp >= now() - INTERVAL 30 DAY"
+        )
+        
+        if start_date and end_date:
+            logger.info("Fetching pricing stats for date range: %s to %s", start_date, end_date)
+        else:
+            logger.info("Fetching pricing stats for last 30 days (no date range provided)")
+        query = pricing_stats_query(date_filter, org_id, PEPSI_BROKER_NODE_ID)
+        
+        client = get_clickhouse_client()
+        rows = _json_each_row( client, query, settings={
+            "max_execution_time": 60,
+            "max_memory_usage": 2_000_000_000,
+            "max_threads": 4,
+        },
+    )
+        logger.info("Pricing stats query result: %d rows", len(rows))
+        if not rows:
+            logger.info("No pricing stats found")
+            return None
+        return [PricingStats(
+            pricing_notes=str(r.get("pricing_notes") or "Unknown"),
+            count=int(r.get("count", 0)),   
+            percentage=float(r.get("percentage", 0.0)),
+        ) for r in rows]
+    except Exception as e:
+        logger.exception("Error fetching pricing stats: %s", e)
+        return []
