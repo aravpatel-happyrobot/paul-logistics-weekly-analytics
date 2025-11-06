@@ -1,7 +1,7 @@
 from fastapi import FastAPI, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
 from dotenv import load_dotenv
-from db import fetch_calls_ending_in_each_call_stage_stats, fetch_carrier_asked_transfer_over_total_transfer_attempts_stats, fetch_carrier_asked_transfer_over_total_call_attempts_stats,fetch_load_not_found_stats, fetch_successfully_transferred_for_booking_stats, fetch_call_classication_stats, fetch_carrier_qualification_stats, fetch_pricing_stats
+from db import fetch_calls_ending_in_each_call_stage_stats, fetch_carrier_asked_transfer_over_total_transfer_attempts_stats, fetch_carrier_asked_transfer_over_total_call_attempts_stats,fetch_load_not_found_stats, fetch_load_status_stats, fetch_successfully_transferred_for_booking_stats, fetch_call_classication_stats, fetch_carrier_qualification_stats, fetch_pricing_stats
 from typing import Optional
 import os
 from pathlib import Path
@@ -131,6 +131,20 @@ async def get_load_not_found_stats(start_date: Optional[str] = None, end_date: O
         logger.exception("Error in get_load_not_found_stats endpoint")
         raise HTTPException(status_code=500, detail=f"Error fetching load not found stats: {str(e)}")
 
+@app.get("/load-status-stats")
+async def get_load_status_stats(start_date: Optional[str] = None, end_date: Optional[str] = None):
+    """Get load status stats"""
+    try:
+        result = fetch_load_status_stats(start_date, end_date)
+        if result is None:
+            raise HTTPException(status_code=404, detail="No load status stats found")
+        return [{"load_status": r.load_status, "count": r.count, "total_calls": r.total_calls, "load_status_percentage": r.load_status_percentage} for r in result]
+    except Exception as e:
+        import logging
+        logger = logging.getLogger(__name__)
+        logger.exception("Error in get_load_status_stats endpoint")
+        raise HTTPException(status_code=500, detail=f"Error fetching load status stats: {str(e)}")
+
 @app.get("/successfully-transferred-for-booking-stats")
 async def get_successfully_transferred_for_booking_stats(start_date: Optional[str] = None, end_date: Optional[str] = None):
     """Get successfully transferred for booking stats"""
@@ -185,3 +199,146 @@ async def get_pricing_stats(start_date: Optional[str] = None, end_date: Optional
         logger = logging.getLogger(__name__)
         logger.exception("Error in get_pricing_stats endpoint")
         raise HTTPException(status_code=500, detail=f"Error fetching pricing stats: {str(e)}")
+
+@app.get("/all-stats")
+async def get_all_stats(start_date: Optional[str] = None, end_date: Optional[str] = None):
+    """Get all stats aggregated with labels"""
+    import logging
+    logger = logging.getLogger(__name__)
+    
+    stats = {}
+    errors = {}
+    
+    # Call stage stats
+    try:
+        call_stage_results = fetch_calls_ending_in_each_call_stage_stats(start_date, end_date)
+        stats["call_stage_stats"] = [{"call_stage": r.call_stage, "count": r.count, "percentage": r.percentage} for r in call_stage_results]
+    except Exception as e:
+        logger.exception("Error fetching call stage stats")
+        errors["call_stage_stats"] = str(e)
+        stats["call_stage_stats"] = None
+    
+    # Carrier asked transfer over total transfer attempts
+    try:
+        carrier_transfer_result = fetch_carrier_asked_transfer_over_total_transfer_attempts_stats(start_date, end_date)
+        if carrier_transfer_result:
+            stats["carrier_asked_transfer_over_total_transfer_attempts"] = {
+                "carrier_asked_count": carrier_transfer_result.carrier_asked_count,
+                "total_transfer_attempts": carrier_transfer_result.total_transfer_attempts,
+                "carrier_asked_percentage": carrier_transfer_result.carrier_asked_percentage
+            }
+        else:
+            stats["carrier_asked_transfer_over_total_transfer_attempts"] = None
+    except Exception as e:
+        logger.exception("Error fetching carrier asked transfer over total transfer attempts stats")
+        errors["carrier_asked_transfer_over_total_transfer_attempts"] = str(e)
+        stats["carrier_asked_transfer_over_total_transfer_attempts"] = None
+    
+    # Carrier asked transfer over total call attempts
+    try:
+        carrier_call_result = fetch_carrier_asked_transfer_over_total_call_attempts_stats(start_date, end_date)
+        if carrier_call_result:
+            stats["carrier_asked_transfer_over_total_call_attempts"] = {
+                "carrier_asked_count": carrier_call_result.carrier_asked_count,
+                "total_call_attempts": carrier_call_result.total_call_attempts,
+                "carrier_asked_percentage": carrier_call_result.carrier_asked_percentage
+            }
+        else:
+            stats["carrier_asked_transfer_over_total_call_attempts"] = None
+    except Exception as e:
+        logger.exception("Error fetching carrier asked transfer over total call attempts stats")
+        errors["carrier_asked_transfer_over_total_call_attempts"] = str(e)
+        stats["carrier_asked_transfer_over_total_call_attempts"] = None
+    
+    # Load not found stats
+    try:
+        load_not_found_result = fetch_load_not_found_stats(start_date, end_date)
+        if load_not_found_result:
+            stats["load_not_found"] = {
+                "load_not_found_count": load_not_found_result.load_not_found_count,
+                "total_calls": load_not_found_result.total_calls,
+                "load_not_found_percentage": load_not_found_result.load_not_found_percentage
+            }
+        else:
+            stats["load_not_found"] = None
+    except Exception as e:
+        logger.exception("Error fetching load not found stats")
+        errors["load_not_found"] = str(e)
+        stats["load_not_found"] = None
+    
+    # Load status stats
+    try:
+        load_status_results = fetch_load_status_stats(start_date, end_date)
+        if load_status_results:
+            stats["load_status"] = [{"load_status": r.load_status, "count": r.count, "total_calls": r.total_calls, "load_status_percentage": r.load_status_percentage} for r in load_status_results]
+        else:
+            stats["load_status"] = None
+    except Exception as e:
+        logger.exception("Error fetching load status stats")
+        errors["load_status"] = str(e)
+        stats["load_status"] = None
+    
+    # Successfully transferred for booking stats
+    try:
+        transferred_result = fetch_successfully_transferred_for_booking_stats(start_date, end_date)
+        if transferred_result:
+            stats["successfully_transferred_for_booking"] = {
+                "successfully_transferred_for_booking_count": transferred_result.successfully_transferred_for_booking_count,
+                "total_calls": transferred_result.total_calls,
+                "successfully_transferred_for_booking_percentage": transferred_result.successfully_transferred_for_booking_percentage
+            }
+        else:
+            stats["successfully_transferred_for_booking"] = None
+    except Exception as e:
+        logger.exception("Error fetching successfully transferred for booking stats")
+        errors["successfully_transferred_for_booking"] = str(e)
+        stats["successfully_transferred_for_booking"] = None
+    
+    # Call classification stats
+    try:
+        call_classification_results = fetch_call_classication_stats(start_date, end_date)
+        if call_classification_results:
+            stats["call_classification"] = [{"call_classification": r.call_classification, "count": r.count, "percentage": r.percentage} for r in call_classification_results]
+        else:
+            stats["call_classification"] = None
+    except Exception as e:
+        logger.exception("Error fetching call classification stats")
+        errors["call_classification"] = str(e)
+        stats["call_classification"] = None
+    
+    # Carrier qualification stats
+    try:
+        carrier_qualification_results = fetch_carrier_qualification_stats(start_date, end_date)
+        if carrier_qualification_results:
+            stats["carrier_qualification"] = [{"carrier_qualification": r.carrier_qualification, "count": r.count, "percentage": r.percentage} for r in carrier_qualification_results]
+        else:
+            stats["carrier_qualification"] = None
+    except Exception as e:
+        logger.exception("Error fetching carrier qualification stats")
+        errors["carrier_qualification"] = str(e)
+        stats["carrier_qualification"] = None
+    
+    # Pricing stats
+    try:
+        pricing_results = fetch_pricing_stats(start_date, end_date)
+        if pricing_results:
+            stats["pricing"] = [{"pricing_notes": r.pricing_notes, "count": r.count, "percentage": r.percentage} for r in pricing_results]
+        else:
+            stats["pricing"] = None
+    except Exception as e:
+        logger.exception("Error fetching pricing stats")
+        errors["pricing"] = str(e)
+        stats["pricing"] = None
+    
+    response = {
+        "stats": stats,
+        "date_range": {
+            "start_date": start_date,
+            "end_date": end_date
+        }
+    }
+    
+    if errors:
+        response["errors"] = errors
+    
+    return response
