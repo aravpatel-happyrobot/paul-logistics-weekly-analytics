@@ -305,7 +305,7 @@ def successfully_transferred_for_booking_stats_query(date_filter: str, org_id: s
     FROM successfully_transferred_for_booking_count stfb, total_calls tc
     """
 
-def call_classication_stats_query(date_filter: str, org_id: str, PEPSI_BROKER_NODE_ID: str) -> str:
+def call_classifcation_stats_query(date_filter: str, org_id: str, PEPSI_BROKER_NODE_ID: str) -> str:
     # percentage of calls ending in each call stage
     return f"""
         WITH recent_runs AS (
@@ -345,6 +345,75 @@ def call_classication_stats_query(date_filter: str, org_id: str, PEPSI_BROKER_NO
         CROSS JOIN total_calls tc
         ORDER BY ccs.count DESC
     """
+
+    # return f"""
+    #     WITH recent_runs AS (
+    #         SELECT id AS run_id
+    #         FROM public_runs
+    #         WHERE {date_filter}
+    #     ),
+    #     sessions AS (
+    #         SELECT run_id, user_number FROM public_sessions
+    #         WHERE {date_filter}
+    #         AND org_id = '{org_id}'
+    #     ),
+    #     pricing_stats AS (
+    #         SELECT
+    #             JSONExtractString(no.flat_data, 'result.pricing.pricing_notes') AS pricing_notes,
+    #             no.run_id AS run_id,
+    #             COUNT(*) AS count
+    #         FROM public_node_outputs no
+    #         INNER JOIN recent_runs rr ON no.run_id = rr.run_id
+    #         INNER JOIN public_nodes n ON no.node_id = n.id
+    #         INNER JOIN sessions s ON no.run_id = s.run_id
+    #         WHERE n.org_id = '{org_id}'
+    #         AND no.node_persistent_id = '{PEPSI_BROKER_NODE_ID}'
+    #         AND JSONHas(no.flat_data, 'result.pricing.pricing_notes') = 1
+    #         AND JSONExtractString(no.flat_data, 'result.pricing.pricing_notes') != ''
+    #         AND JSONExtractString(no.flat_data, 'result.pricing.pricing_notes') != 'null'
+    #         AND s.user_number != '+19259898099'
+    #         GROUP BY pricing_notes, run_id
+    #     ),
+    #     call_classification_stats AS (
+    #         SELECT
+    #             JSONExtractString(no.flat_data, 'result.call.call_classification') AS call_classification,
+    #             COUNT(*) AS count
+    #         FROM public_node_outputs no
+    #         INNER JOIN recent_runs rr ON no.run_id = rr.run_id
+    #         INNER JOIN public_nodes n ON no.node_id = n.id
+    #         INNER JOIN sessions s ON no.run_id = s.run_id
+    #         INNER JOIN pricing_stats ps ON no.run_id = ps.run_id
+    #         WHERE n.org_id = '{org_id}'
+    #         AND no.node_persistent_id = '{PEPSI_BROKER_NODE_ID}'
+    #         AND JSONHas(no.flat_data, 'result.call.call_classification') = 1
+    #         AND JSONExtractString(no.flat_data, 'result.call.call_classification') != ''
+    #         AND JSONExtractString(no.flat_data, 'result.call.call_classification') != 'null'
+    #         AND s.user_number != '+19259898099'
+    #         -- Only count success if pricing.pricing_notes match
+    #         AND (
+    #             JSONExtractString(no.flat_data, 'result.call.call_classification') != 'success'
+    #             OR (
+    #                 JSONExtractString(no.flat_data, 'result.call.call_classification') = 'success'
+    #                 AND JSONExtractString(no.flat_data, 'result.pricing.pricing_notes') IN (
+    #                     'AGREEMENT_REACHED_WITH_NEOGTIATION',
+    #                     'AGREEMENT_REACHED_WITHOUT_NEOGTIATION'
+    #                 )
+    #             )
+    #         )
+    #         GROUP BY call_classification
+    #     ),
+    #     total_calls AS (
+    #         SELECT SUM(count) AS total FROM call_classification_stats
+    #     )
+    #     SELECT
+    #         ccs.call_classification,
+    #         ccs.count,
+    #         ROUND((ccs.count * 100.0) / tc.total, 2) AS percentage
+    #     FROM call_classification_stats ccs
+    #     CROSS JOIN total_calls tc
+    #     ORDER BY ccs.count DESC
+    # """
+
 
 
 def carrier_qualification_stats_query(date_filter: str, org_id: str, PEPSI_BROKER_NODE_ID: str) -> str:

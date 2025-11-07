@@ -15,7 +15,7 @@ import clickhouse_connect
 # from timezone_utils import get_time_filter, format_timestamp_for_display
 from datetime import datetime, timedelta, timezone
 
-from queries import carrier_asked_transfer_over_total_transfer_attempt_stats_query, carrier_asked_transfer_over_total_call_attempts_stats_query, calls_ending_in_each_call_stage_stats_query, load_not_found_stats_query, load_status_stats_query, successfully_transferred_for_booking_stats_query, call_classication_stats_query, carrier_qualification_stats_query, pricing_stats_query, carrier_end_state_query
+from queries import carrier_asked_transfer_over_total_transfer_attempt_stats_query, carrier_asked_transfer_over_total_call_attempts_stats_query, calls_ending_in_each_call_stage_stats_query, load_not_found_stats_query, load_status_stats_query, successfully_transferred_for_booking_stats_query, call_classifcation_stats_query, carrier_qualification_stats_query, pricing_stats_query, carrier_end_state_query
 
 logger = logging.getLogger(__name__)
 logger.setLevel(logging.INFO)
@@ -808,7 +808,7 @@ def fetch_successfully_transferred_for_booking_stats(start_date: Optional[str] =
         logger.exception("Error fetching successfully transferred for booking stats: %s", e)
         return None
 
-def fetch_call_classication_stats(start_date: Optional[str] = None, end_date: Optional[str] = None) -> Optional[CallClassificationStats]:
+def fetch_call_classifcation_stats(start_date: Optional[str] = None, end_date: Optional[str] = None) -> Optional[CallClassificationStats]:
     org_id = get_org_id()
     if not org_id:
         logger.error("❌ ORG_ID not found in environment variables. Please check your .env and restart the app.")
@@ -825,7 +825,7 @@ def fetch_call_classication_stats(start_date: Optional[str] = None, end_date: Op
             logger.info("Fetching call classification stats for date range: %s to %s", start_date, end_date)
         else:
             logger.info("Fetching call classification stats for last 30 days (no date range provided)")
-        query = call_classication_stats_query(date_filter, org_id, PEPSI_BROKER_NODE_ID)
+        query = call_classifcation_stats_query(date_filter, org_id, PEPSI_BROKER_NODE_ID)
         
         client = get_clickhouse_client()
         rows = _json_each_row( client, query, settings={
