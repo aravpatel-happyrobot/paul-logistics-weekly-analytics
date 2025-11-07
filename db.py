@@ -94,7 +94,8 @@ def get_clickhouse_client():
         password=password,
         database=database,
         secure=is_secure,
-        send_receive_timeout=60,
+        connect_timeout=30,
+        send_receive_timeout=120,
     )
 
 
