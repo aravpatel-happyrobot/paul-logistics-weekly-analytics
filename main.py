@@ -2,9 +2,8 @@ from fastapi import FastAPI, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
 from dotenv import load_dotenv
 from db import fetch_calls_ending_in_each_call_stage_stats, fetch_carrier_asked_transfer_over_total_transfer_attempts_stats, fetch_carrier_asked_transfer_over_total_call_attempts_stats,fetch_load_not_found_stats, fetch_load_status_stats, fetch_successfully_transferred_for_booking_stats, fetch_call_classifcation_stats, fetch_carrier_qualification_stats, fetch_pricing_stats, fetch_carrier_end_state_stats, fetch_percent_non_convertible_calls, fetch_number_of_unique_loads
-from typing import Optional, Any
+from typing import Optional
 import os
-import math
 from pathlib import Path
 
 # Load environment variables from .env file
@@ -48,20 +47,6 @@ app.add_middleware(
     allow_methods=["*"],
     allow_headers=["*"],
 )
-
-
-def clean_nan_values(obj: Any) -> Any:
-    """Recursively clean NaN, Infinity, and -Infinity values from data structures"""
-    if isinstance(obj, float):
-        if math.isnan(obj) or math.isinf(obj):
-            return None
-        return obj
-    elif isinstance(obj, dict):
-        return {key: clean_nan_values(value) for key, value in obj.items()}
-    elif isinstance(obj, list):
-        return [clean_nan_values(item) for item in obj]
-    else:
-        return obj
 
 
 @app.get("/")
@@ -447,5 +432,4 @@ async def get_all_stats(start_date: Optional[str] = None, end_date: Optional[str
     if errors:
         response["errors"] = errors
     
-    # Clean NaN and Infinity values before returning (they're not JSON compliant)
-    return clean_nan_values(response)
+    return response
