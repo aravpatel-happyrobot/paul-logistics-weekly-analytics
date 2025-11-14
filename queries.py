@@ -597,12 +597,13 @@ def number_of_unique_loads_query(date_filter: str, org_id: str, PEPSI_FBR_NODE_I
             WHERE {date_filter}
         ),
         sessions AS (
-            SELECT run_id, user_number FROM public_sessions
-            WHERE {date_filter}
-            AND org_id = '{org_id}'
-            AND isNotNull(user_number)
-            AND user_number != ''
-            AND user_number != '+19259898099'
+            SELECT DISTINCT s.run_id, s.user_number 
+            FROM public_sessions s
+            INNER JOIN recent_runs rr ON s.run_id = rr.run_id
+            WHERE s.org_id = '{org_id}'
+            AND isNotNull(s.user_number)
+            AND s.user_number != ''
+            AND s.user_number != '+19259898099'
         ),
         number_of_unique_loads_stats AS (
             SELECT SUM(1) AS number_of_unique_loads FROM (
@@ -622,6 +623,9 @@ def number_of_unique_loads_query(date_filter: str, org_id: str, PEPSI_FBR_NODE_I
         total_calls AS (
             SELECT SUM(1) AS total_calls FROM sessions
         )
-        SELECT number_of_unique_loads, total_calls, ROUND(total_calls/number_of_unique_loads, 2) AS calls_per_unique_load
+        SELECT 
+            number_of_unique_loads, 
+            total_calls, 
+            ifNull(round(total_calls / nullIf(number_of_unique_loads, 0), 2), 0) AS calls_per_unique_load
         FROM number_of_unique_loads_stats, total_calls
         """
