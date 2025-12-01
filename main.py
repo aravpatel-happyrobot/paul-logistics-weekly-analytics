@@ -236,8 +236,8 @@ async def get_number_of_unique_loads_stats(start_date: Optional[str] = None, end
         result = fetch_number_of_unique_loads(start_date, end_date)
         return {
             "number_of_unique_loads": result.number_of_unique_loads,
-            "total_calls_count": result.total_calls_count,
-            "number_of_unique_loads_percentage": result.number_of_unique_loads_percentage
+            "total_calls_count": result.total_calls,
+            "number_of_unique_loads_percentage": result.calls_per_unique_load
 
         }
     except Exception as e:

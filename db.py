@@ -177,9 +177,9 @@ CLICKHOUSE_QUERY_SETTINGS = {
 }
 
 # Cutoff date for switching between broker_node and FBR queries
-# Dates <= Nov 6, 2024 use broker_node queries
-# Dates >= Nov 7, 2024 use FBR queries
-UNIQUE_LOADS_CUTOFF_DATE = "2024-11-07T00:00:00"
+# Dates BEFORE Nov 7, 2025 (i.e., Nov 6, 2025 and earlier) use broker_node queries
+# Dates Nov 7, 2025 and AFTER use FBR (find by reference) queries
+UNIQUE_LOADS_CUTOFF_DATE = "2025-11-07T00:00:00"
 
 # ---- Data models -------------------------------------------------------------
 
@@ -992,7 +992,8 @@ def fetch_percent_non_convertible_calls(start_date: Optional[str] = None, end_da
 
 def _split_date_range_for_unique_loads(start_date: Optional[str], end_date: Optional[str]) -> Tuple[Optional[Tuple[str, str]], Optional[Tuple[str, str]]]:
     """
-    Split date range at Nov 7, 2024 cutoff.
+    Split date range at Nov 7, 2025 cutoff.
+    Dates before Nov 7, 2025 use broker_node, dates Nov 7, 2025 and after use FBR.
     Returns: (broker_node_range, fbr_range) where each range is (start, end) or None
     """
     if not start_date or not end_date:
@@ -1008,15 +1009,19 @@ def _split_date_range_for_unique_loads(start_date: Optional[str], end_date: Opti
         broker_range = None
         fbr_range = None
         
-        # If start_date is before cutoff
+        # If start_date is before Nov 7, 2025
         if start_dt < cutoff_dt:
+            # End date for broker_range is the minimum of: end_date or Nov 7, 2025
             broker_end = min(end_dt, cutoff_dt)
             broker_range = (start_date, broker_end.strftime('%Y-%m-%dT%H:%M:%S'))
         
-        # If end_date is after cutoff
+        # If end_date is Nov 7, 2025 or after
         if end_dt >= cutoff_dt:
+            # Start date for FBR range is the maximum of: start_date or Nov 7, 2025
             fbr_start = max(start_dt, cutoff_dt)
             fbr_range = (fbr_start.strftime('%Y-%m-%dT%H:%M:%S'), end_date)
+
+        logger.info(f"broker_range: {broker_range}, fbr_range: {fbr_range}")
         
         return broker_range, fbr_range
     except Exception as e:
@@ -1126,6 +1131,7 @@ def fetch_list_of_unique_loads(start_date: Optional[str] = None, end_date: Optio
     
     try:
         broker_range, fbr_range = _split_date_range_for_unique_loads(start_date, end_date)
+        logger.info(f"After split - broker_range: {broker_range}, fbr_range: {fbr_range}")
         
         # If no date range provided, use default
         if not start_date or not end_date:
@@ -1147,6 +1153,7 @@ def fetch_list_of_unique_loads(start_date: Optional[str] = None, end_date: Optio
             
             # Get broker_node results
             broker_filter = f"timestamp >= parseDateTime64BestEffort('{broker_range[0]}') AND timestamp < parseDateTime64BestEffort('{broker_range[1]}')"
+            print(f'broker_filter: {broker_filter}')
             broker_query = list_of_unique_loads_query_broker_node(broker_filter, org_id, PEPSI_BROKER_NODE_ID)
             broker_rows = _json_each_row(client, broker_query, settings=CLICKHOUSE_QUERY_SETTINGS)
             broker_loads = {str(r.get("custom_load_id")) for r in broker_rows if r.get("custom_load_id")}
@@ -1154,8 +1161,10 @@ def fetch_list_of_unique_loads(start_date: Optional[str] = None, end_date: Optio
             
             # Get FBR results
             fbr_filter = f"timestamp >= parseDateTime64BestEffort('{fbr_range[0]}') AND timestamp < parseDateTime64BestEffort('{fbr_range[1]}')"
+            print(f'fbr_filter: {fbr_filter}')
             fbr_query = list_of_unique_loads_query(fbr_filter, org_id, PEPSI_FBR_NODE_ID)
             fbr_rows = _json_each_row(client, fbr_query, settings=CLICKHOUSE_QUERY_SETTINGS)
+            # print(f'fbr_rows: {fbr_rows}')
             fbr_loads = {str(r.get("custom_load_id")) for r in fbr_rows if r.get("custom_load_id")}
             all_loads.update(fbr_loads)
             
@@ -1166,13 +1175,20 @@ def fetch_list_of_unique_loads(start_date: Optional[str] = None, end_date: Optio
             logger.info("Fetching list of unique loads for broker_node date range: %s to %s", broker_range[0], broker_range[1])
             date_filter = f"timestamp >= parseDateTime64BestEffort('{broker_range[0]}') AND timestamp < parseDateTime64BestEffort('{broker_range[1]}')"
             query = list_of_unique_loads_query_broker_node(date_filter, org_id, PEPSI_BROKER_NODE_ID)
-        else:  # fbr_range
+            logger.info(f"Executing broker_node query for date filter: {date_filter}")
+        elif fbr_range:
             logger.info("Fetching list of unique loads for FBR date range: %s to %s", fbr_range[0], fbr_range[1])
             date_filter = f"timestamp >= parseDateTime64BestEffort('{fbr_range[0]}') AND timestamp < parseDateTime64BestEffort('{fbr_range[1]}')"
             query = list_of_unique_loads_query(date_filter, org_id, PEPSI_FBR_NODE_ID)
+            logger.info(f"Executing FBR query for date filter: {date_filter}")
+        else:
+            logger.warning("Neither broker_range nor fbr_range was set! This should not happen.")
+            return ListOfUniqueLoadsStats(list_of_unique_loads=[])
         
         rows = _json_each_row(client, query, settings=CLICKHOUSE_QUERY_SETTINGS)
+        logger.info(f"Query returned {len(rows)} rows")
         rows = [str(r.get("custom_load_id")) for r in rows if r.get("custom_load_id")]
+        logger.info(f"After filtering, {len(rows)} rows with custom_load_id")
         if not rows:
             logger.info("No list of unique loads found")
             return ListOfUniqueLoadsStats(list_of_unique_loads=[])
