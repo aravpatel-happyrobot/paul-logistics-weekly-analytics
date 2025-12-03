@@ -274,6 +274,17 @@ class CallsWithoutCarrierAskedForTransferStats:
     other_calls_duration: int
     total_duration_no_carrier_asked_for_transfer: int
     total_calls_no_carrier_asked_for_transfer: int
+    alternate_equipment_count: int
+    caller_hung_up_no_explanation_count: int
+    load_not_ready_count: int
+    load_past_due_count: int
+    covered_count: int
+    carrier_not_qualified_count: int
+    alternate_date_or_time_count: int
+    user_declined_load_count: int
+    checking_with_driver_count: int
+    carrier_cannot_see_reference_number_count: int
+    caller_put_on_hold_assistant_hung_up_count: int
 
 @dataclass
 class TotalCallsAndTotalDurationStats:
@@ -1258,6 +1269,17 @@ def fetch_calls_without_carrier_asked_for_transfer(start_date: Optional[str] = N
             other_calls_duration=int(r.get("other_calls_duration", 0)),
             total_duration_no_carrier_asked_for_transfer=int(r.get("total_duration_no_carrier_asked_for_transfer", 0)),
             total_calls_no_carrier_asked_for_transfer=int(r.get("total_calls_no_carrier_asked_for_transfer", 0)),
+            alternate_equipment_count=int(r.get("alternate_equipment_count", 0)),
+            caller_hung_up_no_explanation_count=int(r.get("caller_hung_up_no_explanation_count", 0)),
+            load_not_ready_count=int(r.get("load_not_ready_count", 0)),
+            load_past_due_count=int(r.get("load_past_due_count", 0)),
+            covered_count=int(r.get("covered_count", 0)),
+            carrier_not_qualified_count=int(r.get("carrier_not_qualified_count", 0)),
+            alternate_date_or_time_count=int(r.get("alternate_date_or_time_count", 0)),
+            user_declined_load_count=int(r.get("user_declined_load_count", 0)),
+            checking_with_driver_count=int(r.get("checking_with_driver_count", 0)),
+            carrier_cannot_see_reference_number_count=int(r.get("carrier_cannot_see_reference_number_count", 0)),
+            caller_put_on_hold_assistant_hung_up_count=int(r.get("caller_put_on_hold_assistant_hung_up_count", 0)),
         )
     except Exception as e:
         logger.exception("Error fetching calls without carrier asked for transfer: %s", e)

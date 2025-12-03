@@ -940,65 +940,124 @@ def calls_without_carrier_asked_for_transfer_query(
                 call_classification
         )
 
-        SELECT
-            -- non-convertible
-            countDistinctIf(
-                run_id,
-                call_classification IN (
-                    'alternate_equipment',
-                    'caller_hung_up_no_explanation',
-                    'load_not_ready',
-                    'load_past_due',
-                    'covered',
-                    'carrier_not_qualified',
-                    'alternate_date_or_time',
-                    'user_declined_load',
-                    'checking_with_driver',
-                    'carrier_cannot_see_reference_number',
-                    'caller_put_on_hold_assistant_hung_up'
-                )
-            ) AS non_convertible_calls_count,
-            sumIf(
-                duration,
-                call_classification IN (
-                    'alternate_equipment',
-                    'caller_hung_up_no_explanation',
-                    'load_not_ready',
-                    'load_past_due',
-                    'covered',
-                    'carrier_not_qualified',
-                    'alternate_date_or_time',
-                    'user_declined_load',
-                    'checking_with_driver',
-                    'carrier_cannot_see_reference_number',
-                    'caller_put_on_hold_assistant_hung_up'
-                )
-            ) AS non_convertible_calls_duration,
+                SELECT
+            -- raw counts
+            non_convertible_calls_count,
+            alternate_equipment_count,
+            caller_hung_up_no_explanation_count,
+            load_not_ready_count,
+            load_past_due_count,
+            covered_count,
+            carrier_not_qualified_count,
+            alternate_date_or_time_count,
+            user_declined_load_count,
+            checking_with_driver_count,
+            carrier_cannot_see_reference_number_count,
+            caller_put_on_hold_assistant_hung_up_count,
 
-            -- rate_too_high
-            countDistinctIf(run_id, call_classification = 'rate_too_high')
-                AS rate_too_high_calls_count,
-            sumIf(duration, call_classification = 'rate_too_high')
-                AS rate_too_high_calls_duration,
+            -- percentages of non-convertible calls (0–1 or *100 for %)
+            alternate_equipment_count
+                / nullIf(non_convertible_calls_count, 0) AS alternate_equipment_pct,
+            caller_hung_up_no_explanation_count
+                / nullIf(non_convertible_calls_count, 0) AS caller_hung_up_no_explanation_pct,
+            load_not_ready_count
+                / nullIf(non_convertible_calls_count, 0) AS load_not_ready_pct,
+            load_past_due_count
+                / nullIf(non_convertible_calls_count, 0) AS load_past_due_pct,
+            covered_count
+                / nullIf(non_convertible_calls_count, 0) AS covered_pct,
+            carrier_not_qualified_count
+                / nullIf(non_convertible_calls_count, 0) AS carrier_not_qualified_pct,
+            alternate_date_or_time_count
+                / nullIf(non_convertible_calls_count, 0) AS alternate_date_or_time_pct,
+            user_declined_load_count
+                / nullIf(non_convertible_calls_count, 0) AS user_declined_load_pct,
+            checking_with_driver_count
+                / nullIf(non_convertible_calls_count, 0) AS checking_with_driver_pct,
+            carrier_cannot_see_reference_number_count
+                / nullIf(non_convertible_calls_count, 0) AS carrier_cannot_see_reference_number_pct,
+            caller_put_on_hold_assistant_hung_up_count
+                / nullIf(non_convertible_calls_count, 0) AS caller_put_on_hold_assistant_hung_up_pct,
 
-            -- success / after_hours
-            countDistinctIf(run_id, call_classification IN ('success', 'after_hours'))
-                AS success_calls_count,
-            sumIf(duration, call_classification IN ('success', 'after_hours'))
-                AS success_calls_duration,
+            -- keep your existing high-level buckets if you want
+            rate_too_high_calls_count,
+            rate_too_high_calls_duration,
+            success_calls_count,
+            success_calls_duration,
+            other_calls_count,
+            other_calls_duration,
 
-            -- other
-            countDistinctIf(run_id, call_classification = 'other')
-                AS other_calls_count,
-            sumIf(duration, call_classification = 'other')
-                AS other_calls_duration,
+            total_calls_no_carrier_asked_for_transfer,
+            total_duration_no_carrier_asked_for_transfer
 
-            -- totals (wrapped in aggregate)
-            any(total_overall.total_calls)    AS total_calls_no_carrier_asked_for_transfer,
-            any(total_overall.total_duration) AS total_duration_no_carrier_asked_for_transfer
+        FROM (
+            SELECT
+                -- total non-convertible (same definition as before)
+                countDistinctIf(
+                    run_id,
+                    call_classification IN (
+                        'alternate_equipment',
+                        'caller_hung_up_no_explanation',
+                        'load_not_ready',
+                        'load_past_due',
+                        'covered',
+                        'carrier_not_qualified',
+                        'alternate_date_or_time',
+                        'user_declined_load',
+                        'checking_with_driver',
+                        'carrier_cannot_see_reference_number',
+                        'caller_put_on_hold_assistant_hung_up'
+                    )
+                ) AS non_convertible_calls_count,
 
-        FROM calls
-        CROSS JOIN total_calls_without_carrier_asked_for_transfer_overall AS total_overall
+                -- per-reason counts inside non-convertible
+                countDistinctIf(run_id, call_classification = 'alternate_equipment')
+                    AS alternate_equipment_count,
+                countDistinctIf(run_id, call_classification = 'caller_hung_up_no_explanation')
+                    AS caller_hung_up_no_explanation_count,
+                countDistinctIf(run_id, call_classification = 'load_not_ready')
+                    AS load_not_ready_count,
+                countDistinctIf(run_id, call_classification = 'load_past_due')
+                    AS load_past_due_count,
+                countDistinctIf(run_id, call_classification = 'covered')
+                    AS covered_count,
+                countDistinctIf(run_id, call_classification = 'carrier_not_qualified')
+                    AS carrier_not_qualified_count,
+                countDistinctIf(run_id, call_classification = 'alternate_date_or_time')
+                    AS alternate_date_or_time_count,
+                countDistinctIf(run_id, call_classification = 'user_declined_load')
+                    AS user_declined_load_count,
+                countDistinctIf(run_id, call_classification = 'checking_with_driver')
+                    AS checking_with_driver_count,
+                countDistinctIf(run_id, call_classification = 'carrier_cannot_see_reference_number')
+                    AS carrier_cannot_see_reference_number_count,
+                countDistinctIf(run_id, call_classification = 'caller_put_on_hold_assistant_hung_up')
+                    AS caller_put_on_hold_assistant_hung_up_count,
+
+                -- you can keep your existing duration aggregates as-is or add per-reason durations similarly
+                countDistinctIf(run_id, call_classification = 'rate_too_high')
+                    AS rate_too_high_calls_count,
+                sumIf(duration, call_classification = 'rate_too_high')
+                    AS rate_too_high_calls_duration,
+
+                countDistinctIf(run_id, call_classification IN ('success', 'after_hours'))
+                    AS success_calls_count,
+                sumIf(duration, call_classification IN ('success', 'after_hours'))
+                    AS success_calls_duration,
+
+                countDistinctIf(run_id, call_classification = 'other')
+                    AS other_calls_count,
+                sumIf(duration, call_classification = 'other')
+                    AS other_calls_duration,
+
+                any(total_overall.total_calls)    AS total_calls_no_carrier_asked_for_transfer,
+                any(total_overall.total_duration) AS total_duration_no_carrier_asked_for_transfer
+
+            FROM calls
+            CROSS JOIN total_calls_without_carrier_asked_for_transfer_overall AS total_overall
+        ) t
+
+           
     """
 
 

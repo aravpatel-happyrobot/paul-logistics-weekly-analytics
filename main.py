@@ -482,6 +482,18 @@ async def get_calls_without_carrier_asked_for_transfer_stats(start_date: Optiona
             "duration_success_calls_percentage": result.success_calls_duration / result.total_duration_no_carrier_asked_for_transfer,
             "duration_other_calls_percentage": result.other_calls_duration / result.total_duration_no_carrier_asked_for_transfer,
 
+            "alternate_equipment_count": result.alternate_equipment_count,
+            "caller_hung_up_no_explanation_count": result.caller_hung_up_no_explanation_count,
+            "load_not_ready_count": result.load_not_ready_count,
+            "load_past_due_count": result.load_past_due_count,
+            "covered_count": result.covered_count,
+            "carrier_not_qualified_count": result.carrier_not_qualified_count,
+            "alternate_date_or_time_count": result.alternate_date_or_time_count,
+            "user_declined_load_count": result.user_declined_load_count,
+            "checking_with_driver_count": result.checking_with_driver_count,
+            "carrier_cannot_see_reference_number_count": result.carrier_cannot_see_reference_number_count,
+            "caller_put_on_hold_assistant_hung_up_count": result.caller_put_on_hold_assistant_hung_up_count,
+
 
         }
     except Exception as e:
