@@ -751,7 +751,7 @@ def calls_without_carrier_asked_for_transfer_query(
         ),
         -- Base CTE: runs that have transfer_reason set and not carrier_asked_for_transfer
         eligible_runs AS (
-            SELECT DISTINCT no.run_id
+            SELECT DISTINCT no.run_id as run_id
             FROM public_node_outputs no
             INNER JOIN recent_runs rr ON no.run_id = rr.run_id
             INNER JOIN public_nodes n ON no.node_id = n.id
@@ -911,7 +911,7 @@ def duration_carrier_asked_for_transfer_query(date_filter: str, org_id: str, PEP
               AND user_number != '+19259898099'
         ),
         carrier_asked_sessions AS (
-            SELECT DISTINCT s.run_id, s.duration
+            SELECT DISTINCT s.run_id as run_id, s.duration as duration
             FROM sessions s
             INNER JOIN recent_runs rr ON s.run_id = rr.run_id
             INNER JOIN public_node_outputs no ON s.run_id = no.run_id
