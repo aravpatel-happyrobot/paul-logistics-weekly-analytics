@@ -54,6 +54,7 @@ def carrier_asked_transfer_over_total_transfer_attempt_stats_query(date_filter: 
 
 def carrier_asked_transfer_over_total_call_attempts_stats_query(date_filter: str, org_id: str, PEPSI_BROKER_NODE_ID: str) -> str:
     # percentage of carrier asked transfers over total call attempts
+    # TODO: fix total call attempts
     return f"""
             WITH recent_runs AS (
                 SELECT id AS run_id
@@ -204,8 +205,6 @@ def load_not_found_stats_query(date_filter: str, org_id: str, PEPSI_BROKER_NODE_
         ) AS load_not_found_percentage
     FROM load_not_found_count lnf
     CROSS JOIN total_calls tc
-
-
         """
 
 def load_status_stats_query(date_filter: str, org_id: str, PEPSI_BROKER_NODE_ID: str) -> str:
@@ -223,7 +222,7 @@ def load_status_stats_query(date_filter: str, org_id: str, PEPSI_BROKER_NODE_ID:
     ),
     extracted AS (
         SELECT
-            s.run_id AS run_id,  -- 🔹 added so we can count distinct runs
+            s.run_id AS run_id, 
             JSONExtractString(no.flat_data, 'result.load.load_status') AS load_status
         FROM public_node_outputs AS no
         INNER JOIN recent_runs rr ON no.run_id = rr.run_id

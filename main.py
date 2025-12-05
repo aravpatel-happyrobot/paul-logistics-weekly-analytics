@@ -137,7 +137,9 @@ async def get_load_status_stats(start_date: Optional[str] = None, end_date: Opti
     try:
         result = fetch_load_status_stats(start_date, end_date)
         if result is None:
-            raise HTTPException(status_code=404, detail="No load status stats found")
+            raise HTTPException(status_code=500, detail="Error fetching load status stats")
+        if not result:
+            return []
         return [{"load_status": r.load_status, "count": r.count, "total_calls": r.total_calls, "load_status_percentage": r.load_status_percentage} for r in result]
     except Exception as e:
         import logging

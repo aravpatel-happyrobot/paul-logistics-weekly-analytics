@@ -773,7 +773,7 @@ def fetch_load_not_found_stats(start_date: Optional[str] = None, end_date: Optio
         logger.exception("Error fetching load not found stats: %s", e)
         return None
 
-def fetch_load_status_stats(start_date: Optional[str] = None, end_date: Optional[str] = None) -> Optional[LoadStatusStats]:
+def fetch_load_status_stats(start_date: Optional[str] = None, end_date: Optional[str] = None) -> Optional[List[LoadStatusStats]]:
     org_id = get_org_id()
     if not org_id:
         logger.error("❌ ORG_ID not found in environment variables. Please check your .env and restart the app.")
