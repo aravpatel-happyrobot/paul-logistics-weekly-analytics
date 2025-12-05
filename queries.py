@@ -198,49 +198,60 @@ def load_not_found_stats_query(date_filter: str, org_id: str, PEPSI_BROKER_NODE_
 
 def load_status_stats_query(date_filter: str, org_id: str, PEPSI_BROKER_NODE_ID: str) -> str:
     return f"""
-        WITH recent_runs AS (
+       WITH recent_runs AS (
         SELECT id AS run_id
         FROM public_runs
         WHERE {date_filter}
-    ),
-    sessions AS (
-        SELECT run_id, user_number FROM public_sessions
-        WHERE {date_filter}
-        AND org_id = '{org_id}'
-    ),
-    extracted AS (
-        SELECT
-            JSONExtractString(no.flat_data, 'result.load.load_status') AS load_status
-        FROM public_node_outputs AS no
-        INNER JOIN recent_runs rr ON no.run_id = rr.run_id
-        INNER JOIN public_nodes n ON no.node_id = n.id
-        INNER JOIN sessions s ON no.run_id = s.run_id
-        WHERE n.org_id = '{org_id}'
-        AND no.node_persistent_id = '{PEPSI_BROKER_NODE_ID}'
-        AND s.user_number != '+19259898099'
-    ),
-    load_status_stats AS (
-        SELECT
-            load_status,
-            count() AS cnt
-        FROM extracted
-        WHERE isNotNull(load_status)
-        AND load_status != ''
-        AND load_status != 'null'
-        GROUP BY load_status
-    ),
-    total_calls AS (
-        SELECT sum(cnt) AS total_calls
-        FROM load_status_stats
-    )
+        ),
+        sessions AS (
+            SELECT run_id, user_number
+            FROM public_sessions
+            WHERE {date_filter}
+            AND org_id = '{org_id}'
+        ),
+        extracted AS (
+            SELECT
+                s.run_id,
+                JSONExtractString(no.flat_data, 'result.load.load_status') AS load_status
+            FROM public_node_outputs AS no
+            INNER JOIN recent_runs rr ON no.run_id = rr.run_id
+            INNER JOIN public_nodes n ON no.node_id = n.id
+            INNER JOIN sessions s ON no.run_id = s.run_id
+            WHERE n.org_id = '{org_id}'
+            AND no.node_persistent_id = '{PEPSI_BROKER_NODE_ID}'
+            AND s.user_number != '+19259898099'
+        ),
+        load_status_stats AS (
+            SELECT
+                load_status,
+                countDistinct(run_id) AS cnt  
+            WHERE isNotNull(load_status)
+            AND load_status != ''
+            AND load_status != 'null'
+            GROUP BY load_status
+        ),
+        load_not_found_count AS (
+            SELECT sum(cnt) AS load_not_found_count
+            FROM load_status_stats
+            WHERE load_status = 'NOT_FOUND'
+        ),
+        total_calls AS (
+            SELECT sum(cnt) AS total_calls
+            FROM load_status_stats
+        )
     SELECT
-        lss.load_status,
-        lss.cnt AS count,
-        any(tc.total_calls) AS total_calls,
-        ifNull(round((lss.cnt * 100.0) / nullIf(any(tc.total_calls), 0), 2), 0) AS load_status_percentage
-    FROM load_status_stats lss
-    CROSS JOIN total_calls tc
-    GROUP BY lss.load_status, lss.cnt
+        lnf.load_not_found_count,
+        tc.total_calls,
+        ifNull(
+            round(
+                (lnf.load_not_found_count * 100.0) / nullIf(tc.total_calls, 0),
+                2
+            ),
+            0
+        ) AS load_not_found_percentage
+    FROM load_not_found_count lnf
+    CROSS JOIN total_calls tc;
+
     """
 
 def successfully_transferred_for_booking_stats_query(date_filter: str, org_id: str, PEPSI_BROKER_NODE_ID: str) -> str:
