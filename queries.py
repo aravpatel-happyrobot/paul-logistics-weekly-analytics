@@ -78,6 +78,10 @@ def carrier_asked_transfer_over_total_call_attempts_stats_query(date_filter: str
                   AND JSONHas(no.flat_data, 'result.transfer.transfer_reason') = 1
                   AND JSONExtractString(no.flat_data, 'result.transfer.transfer_reason') != ''
                   AND JSONExtractString(no.flat_data, 'result.transfer.transfer_reason') != 'null'
+                  AND upper(JSONExtractString(no.flat_data, 'result.transfer.transfer_reason')) != 'NO_TRANSFER_INVOLVED'
+                  AND JSONHas(no.flat_data, 'result.transfer.transfer_attempt') = 1
+                  AND upper(JSONExtractString(no.flat_data, 'result.transfer.transfer_attempt')) = 'YES'
+
                   AND s.user_number != '+19259898099'
                 GROUP BY transfer_reason
             ),
