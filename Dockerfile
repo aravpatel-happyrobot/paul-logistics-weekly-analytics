@@ -28,12 +28,13 @@ RUN chmod +x start.sh
 RUN useradd -m -u 1000 appuser && chown -R appuser:appuser /app
 USER appuser
 
-# Expose port (Railway uses PORT env var)
+# Set default port (Railway overrides with PORT env var)
+ENV PORT=8000
 EXPOSE 8000
 
 # Health check
 HEALTHCHECK --interval=30s --timeout=10s --start-period=5s --retries=3 \
     CMD python -c "import urllib.request; urllib.request.urlopen('http://localhost:8000/health')" || exit 1
 
-# Start the application
-CMD ["./start.sh"]
+# Start the application (shell form for proper variable expansion)
+CMD uvicorn main:app --host 0.0.0.0 --port ${PORT:-8000}
