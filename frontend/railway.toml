@@ -4,7 +4,7 @@
 [build]
 # Use the Dockerfile for building
 builder = "DOCKERFILE"
-dockerfilePath = "./Dockerfile"
+dockerfilePath = "frontend/Dockerfile"
 
 [deploy]
 # Number of instances to run
