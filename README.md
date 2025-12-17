@@ -1,11 +1,16 @@
-## Paul Logistics Weekly Analytics (FastAPI + ClickHouse)
+## Paul Logistics Analytics Dashboard
 
-This repository is a **FastAPI** service that exposes REST endpoints for “weekly analytics” over call/session data stored in **ClickHouse**.
+Analytics dashboard and API service for Paul Logistics call data, built with **FastAPI** (backend) and **Next.js** (frontend), querying **ClickHouse** for real-time metrics.
 
-- **Current state**: the codebase is still branded and hardcoded for **PepsiCo** in several places (node IDs, excluded test phone number, unique-load cutoff logic).
-- **Goal**: recreate these stats for **Paul Logistics** by swapping the client-specific identifiers and (if needed) adjusting JSON paths/logic.
+### Features
 
-If you’re adapting this for Paul Logistics, read [`CLIENT_ADAPTATION.md`](./CLIENT_ADAPTATION.md) first.
+- **Daily Reports**: Automated report generation at 6 AM PT with KPIs, breakdowns, and trends
+- **Interactive Dashboard**: Modern Next.js frontend with charts, PDF export, and metric tooltips
+- **Real-time Analytics**: Direct ClickHouse queries for live metrics
+- **Scheduler**: APScheduler-based job runner with catch-up logic for missed reports
+
+If you're adapting this for a different client, read [`CLIENT_ADAPTATION.md`](./CLIENT_ADAPTATION.md).
+For initial setup, see [`CLICKHOUSE_SETUP.md`](./CLICKHOUSE_SETUP.md).
 
 ---
 
@@ -32,7 +37,7 @@ The queries read from these ClickHouse tables:
 ```bash
 python3 -m venv venv
 source venv/bin/activate
-python -m pip install --upgrade pip
+python3 -m pip install --upgrade pip
 pip install -r requirements.txt
 ```
 
@@ -40,13 +45,19 @@ pip install -r requirements.txt
 
 The app loads a local `.env` file from the repo root (same directory as `main.py`). You can also set env vars in your shell / deployment.
 
+Quickstart:
+
+```bash
+cp env.example .env
+```
+
 Required / commonly used env vars:
 - **`CLICKHOUSE_URL`** or **`CLICKHOUSE_HOST`**: ClickHouse host (supports `host:port` or full URL)
 - **`CLICKHOUSE_USERNAME`** or **`CLICKHOUSE_USER`**
 - **`CLICKHOUSE_PASSWORD`**
 - **`CLICKHOUSE_DATABASE`**
 - **`CLICKHOUSE_SECURE`**: `true/false` (use `true` for ClickHouse Cloud)
-- **`ORG_ID`**: the org id used to filter data for the client
+- **`ORG_ID`**: the org id used to filter data for the client (use `GET /debug-node-orgs` to find the correct value for your node)
 - **`ALLOWED_EMBED_ORIGINS`**: CORS allowlist (comma-separated) or `*`
 
 ---
@@ -90,6 +101,7 @@ All stats endpoints accept optional query params:
 - **`GET /calls-without-carrier-asked-for-transfer-stats`**
 - **`GET /total-calls-and-total-duration-stats`**
 - **`GET /duration-carrier-asked-for-transfer-stats`**
+- **`GET /daily-node-outputs`** (convenience endpoint: pulls a single day’s raw rows + extracted fields; defaults to yesterday)
 
 #### Aggregated
 - **`GET /all-stats`**: returns a single JSON payload containing many of the stats above, plus an `errors` map if any sub-call fails.
@@ -104,13 +116,13 @@ Most queries follow the same structure:
 - join `public_node_outputs` → extract JSON fields from `flat_data` with `JSONExtractString()`
 - use `countDistinct(run_id)` for call counts
 
-**Client-specific parts to watch:**
-- `ORG_ID` filter
-- `node_persistent_id` filter (currently hardcoded as Pepsi node IDs)
-- the excluded user/test phone number (currently `+19259898099`)
+**Client-specific configuration (via environment variables):**
+- `ORG_ID` - Organization filter for data isolation
+- `BROKER_NODE_PERSISTENT_ID` - Primary node for analytics queries
+- `EXCLUDED_USER_NUMBERS` - Test phone numbers to filter out
 - JSON paths inside `flat_data` (may differ by client/node)
 
-See [`CLIENT_ADAPTATION.md`](./CLIENT_ADAPTATION.md) for the concrete checklist.
+See [`CLIENT_ADAPTATION.md`](./CLIENT_ADAPTATION.md) for the complete adaptation checklist.
 
 ---
 
@@ -130,8 +142,8 @@ There are a few script-style tests you can run directly:
 
 ```bash
 source venv/bin/activate
-python test_call_stage_stats.py
-python test_percent_non_convertible_calls.py
+python3 test_call_stage_stats.py
+python3 test_percent_non_convertible_calls.py
 ```
 
 There’s also `curl_examples.sh` as a reference for calling endpoints.
@@ -140,8 +152,60 @@ There’s also `curl_examples.sh` as a reference for calling endpoints.
 
 ### Deployment
 
+#### Railway (Recommended)
+
+This project is configured for Railway deployment with Docker:
+
+**Backend Service:**
+1. Create a new project in Railway
+2. Add a PostgreSQL database (Railway provides this)
+3. Connect your GitHub repo and select the root directory
+4. Railway will auto-detect the `Dockerfile` and `railway.toml`
+5. Set environment variables:
+   - `DATABASE_URL` - automatically set by Railway PostgreSQL
+   - `CLICKHOUSE_URL`, `CLICKHOUSE_USERNAME`, `CLICKHOUSE_PASSWORD`, `CLICKHOUSE_DATABASE`
+   - `ORG_ID`, `BROKER_NODE_PERSISTENT_ID`, `CLIENT_NAME`
+   - `SCHEDULER_ENABLED=true`, `SCHEDULER_HOUR=6`, `SCHEDULER_MINUTE=0`
+   - `DEFAULT_TIMEZONE=America/Chicago`
+
+**Frontend Service:**
+1. Add another service in the same project
+2. Connect the same repo but select the `frontend/` directory
+3. Set environment variable:
+   - `NEXT_PUBLIC_API_URL=https://your-backend-service.railway.app`
+
+#### Docker Compose (Local Development)
+
+```bash
+docker compose up --build
+```
+
+This starts:
+- Backend on `http://localhost:8000`
+- Frontend on `http://localhost:3000`
+- PostgreSQL on `localhost:5432`
+
+#### Heroku (Legacy)
+
 This repo includes a Heroku-style `Procfile`:
 
-- `web: uvicorn main:app --host 0.0.0.0 --port $PORT`
+```
+web: uvicorn main:app --host 0.0.0.0 --port $PORT
+```
 
-Set the same env vars (ClickHouse + `ORG_ID`) in your deployment environment.
+Set the same env vars (ClickHouse + `ORG_ID` + `DATABASE_URL`) in your deployment environment.
+
+---
+
+### Production Features
+
+The system includes production-ready reliability features:
+
+- **PostgreSQL/SQLite dual support**: Auto-detects `DATABASE_URL` - uses PostgreSQL in production, SQLite locally
+- **Automated daily reports**: Scheduler runs at 6 AM (configurable) to generate and store reports
+- **Catch-up logic**: On startup, automatically fills any missing reports from the last 7 days
+- **Retry logic**: Failed report generation retries up to 3 times with 60-second delays
+- **Health tracking**: All scheduler runs are logged to database for monitoring
+- **Health endpoints**: `/api/scheduler/health` for comprehensive monitoring
+
+See [`BACKEND_ARCHITECTURE.md`](./BACKEND_ARCHITECTURE.md) for detailed documentation.

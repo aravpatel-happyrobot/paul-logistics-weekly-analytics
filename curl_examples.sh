@@ -31,3 +31,18 @@ curl -v "http://localhost:8000/call-stage-stats?start_date=2024-01-01T00:00:00&e
 #   ...
 # ]
 
+# ------------------------------------------------------------
+# Debug + raw daily data (recommended when setting up a new client)
+
+# Show effective configuration (no secrets)
+curl "http://localhost:8000/debug-config"
+
+# Pull yesterday's raw node outputs (defaults to BROKER_NODE_PERSISTENT_ID if set)
+curl "http://localhost:8000/daily-node-outputs?limit=50"
+
+# Pull yesterday's data in a specific timezone (defines what \"yesterday\" means)
+curl "http://localhost:8000/daily-node-outputs?tz=America/Chicago&limit=50"
+
+# Pull a specific calendar day
+curl "http://localhost:8000/daily-node-outputs?date=2025-12-11&tz=America/Chicago&limit=50"
+

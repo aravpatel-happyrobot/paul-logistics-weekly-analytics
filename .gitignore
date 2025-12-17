@@ -1,2 +1,51 @@
+# Environment files
 .env
+.env.local
+.env.*.local
 
+# SQLite database (local development)
+*.db
+analytics.db
+
+# Python
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+.Python
+venv/
+.venv/
+ENV/
+env/
+.eggs/
+*.egg-info/
+dist/
+build/
+
+# Testing
+.pytest_cache/
+.coverage
+htmlcov/
+.tox/
+
+# IDE
+.idea/
+.vscode/
+*.swp
+*.swo
+*.sublime-*
+
+# OS
+.DS_Store
+Thumbs.db
+*~
+
+# Logs
+*.log
+logs/
+
+# Frontend (also has its own .gitignore)
+frontend/node_modules/
+frontend/.next/
+frontend/out/
+frontend/.env.local

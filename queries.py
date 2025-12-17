@@ -1,5 +1,10 @@
 
-def carrier_asked_transfer_over_total_transfer_attempt_stats_query(date_filter: str, org_id: str, PEPSI_BROKER_NODE_ID: str) -> str:
+def carrier_asked_transfer_over_total_transfer_attempt_stats_query(
+    date_filter: str,
+    org_id: str,
+    node_persistent_id: str,
+    excluded_user_numbers_sql: str = "",
+) -> str:
     # percentage of carrier asked transfers over total transfer attempts
     return f"""
             WITH recent_runs AS (
@@ -11,6 +16,7 @@ def carrier_asked_transfer_over_total_transfer_attempt_stats_query(date_filter: 
                 SELECT run_id, user_number FROM public_sessions
                 WHERE {date_filter}
                 AND org_id = '{org_id}'
+                {excluded_user_numbers_sql}
             ),
             transfer_stats AS (
                 SELECT
@@ -20,15 +26,14 @@ def carrier_asked_transfer_over_total_transfer_attempt_stats_query(date_filter: 
                 INNER JOIN recent_runs rr ON no.run_id = rr.run_id
                 INNER JOIN public_nodes n ON no.node_id = n.id
                 INNER JOIN sessions s ON no.run_id = s.run_id
-                WHERE n.org_id = '{org_id}'
-                  AND no.node_persistent_id = '{PEPSI_BROKER_NODE_ID}'
+                WHERE 1 = 1
+                  AND no.node_persistent_id = '{node_persistent_id}'
                   AND JSONHas(no.flat_data, 'result.transfer.transfer_reason') = 1
                   AND JSONExtractString(no.flat_data, 'result.transfer.transfer_reason') != ''
                   AND JSONExtractString(no.flat_data, 'result.transfer.transfer_reason') != 'null'
                   AND upper(JSONExtractString(no.flat_data, 'result.transfer.transfer_reason')) != 'NO_TRANSFER_INVOLVED'
                   AND JSONHas(no.flat_data, 'result.transfer.transfer_attempt') = 1
                   AND upper(JSONExtractString(no.flat_data, 'result.transfer.transfer_attempt')) = 'YES'
-                  AND s.user_number != '+19259898099'
                 GROUP BY transfer_reason
             ),
             org_totals AS (
@@ -52,9 +57,13 @@ def carrier_asked_transfer_over_total_transfer_attempt_stats_query(date_filter: 
             LIMIT 1
         """
 
-def carrier_asked_transfer_over_total_call_attempts_stats_query(date_filter: str, org_id: str, PEPSI_BROKER_NODE_ID: str) -> str:
-    # percentage of carrier asked transfers over total call attempts
-    # TODO: fix total call attempts
+def carrier_asked_transfer_over_total_call_attempts_stats_query(
+    date_filter: str,
+    org_id: str,
+    node_persistent_id: str,
+    excluded_user_numbers_sql: str = "",
+) -> str:
+    # percentage of carrier asked transfers over ALL classified calls (not just transfers)
     return f"""
             WITH recent_runs AS (
                 SELECT id AS run_id
@@ -65,49 +74,39 @@ def carrier_asked_transfer_over_total_call_attempts_stats_query(date_filter: str
                 SELECT run_id, user_number FROM public_sessions
                 WHERE {date_filter}
                 AND org_id = '{org_id}'
+                {excluded_user_numbers_sql}
             ),
-            transfer_stats AS (
-                SELECT
-                    JSONExtractString(no.flat_data, 'result.transfer.transfer_reason') AS transfer_reason,
-                    countDistinct(s.run_id) AS count
+            carrier_asked_transfers AS (
+                SELECT countDistinct(s.run_id) AS carrier_asked_count
                 FROM public_node_outputs no
                 INNER JOIN recent_runs rr ON no.run_id = rr.run_id
                 INNER JOIN public_nodes n ON no.node_id = n.id
                 INNER JOIN sessions s ON no.run_id = s.run_id
-                WHERE n.org_id = '{org_id}'
-                  AND no.node_persistent_id = '{PEPSI_BROKER_NODE_ID}'
+                WHERE no.node_persistent_id = '{node_persistent_id}'
                   AND JSONHas(no.flat_data, 'result.transfer.transfer_reason') = 1
-                  AND JSONExtractString(no.flat_data, 'result.transfer.transfer_reason') != ''
-                  AND JSONExtractString(no.flat_data, 'result.transfer.transfer_reason') != 'null'
-                  AND upper(JSONExtractString(no.flat_data, 'result.transfer.transfer_reason')) != 'NO_TRANSFER_INVOLVED'
-                  AND JSONHas(no.flat_data, 'result.transfer.transfer_attempt') = 1
-                  AND upper(JSONExtractString(no.flat_data, 'result.transfer.transfer_attempt')) = 'YES'
-
-                  AND s.user_number != '+19259898099'
-                GROUP BY transfer_reason
+                  AND JSONExtractString(no.flat_data, 'result.transfer.transfer_reason') = 'CARRIER_ASKED_FOR_TRANSFER'
             ),
-            org_totals AS (
-                SELECT SUM(count) AS total_call_attempts
-                FROM transfer_stats
-            ),
-            carrier_asked_stats AS (
-                SELECT
-                    ts.count AS carrier_asked_count,
-                    ot.total_call_attempts,
-                    ROUND((ts.count * 100.0) / ot.total_call_attempts, 2) AS carrier_asked_percentage
-                FROM transfer_stats ts
-                CROSS JOIN org_totals ot
-                WHERE ts.transfer_reason = 'CARRIER_ASKED_FOR_TRANSFER'
+            total_classified_calls AS (
+                SELECT COUNT(DISTINCT s.run_id) AS total_call_attempts
+                FROM public_node_outputs no
+                INNER JOIN recent_runs rr ON no.run_id = rr.run_id
+                INNER JOIN sessions s ON no.run_id = s.run_id
+                WHERE no.node_persistent_id = '{node_persistent_id}'
+                AND JSONHas(no.flat_data, 'result.call.call_classification') = 1
             )
             SELECT
-                carrier_asked_count,
-                total_call_attempts,
-                carrier_asked_percentage
-            FROM carrier_asked_stats
-            LIMIT 1
+                cat.carrier_asked_count,
+                tcc.total_call_attempts,
+                ROUND((cat.carrier_asked_count * 100.0) / nullIf(tcc.total_call_attempts, 0), 2) AS carrier_asked_percentage
+            FROM carrier_asked_transfers cat, total_classified_calls tcc
         """
 
-def calls_ending_in_each_call_stage_stats_query(date_filter: str, org_id: str, PEPSI_BROKER_NODE_ID: str) -> str:
+def calls_ending_in_each_call_stage_stats_query(
+    date_filter: str,
+    org_id: str,
+    node_persistent_id: str,
+    excluded_user_numbers_sql: str = "",
+) -> str:
     # percentage of calls ending in each call stage
     return f"""
         WITH recent_runs AS (
@@ -119,6 +118,7 @@ def calls_ending_in_each_call_stage_stats_query(date_filter: str, org_id: str, P
             SELECT run_id, user_number FROM public_sessions
             WHERE {date_filter}
             AND org_id = '{org_id}'
+            {excluded_user_numbers_sql}
         ),
         call_stage_stats AS (
             SELECT
@@ -128,12 +128,10 @@ def calls_ending_in_each_call_stage_stats_query(date_filter: str, org_id: str, P
             INNER JOIN recent_runs rr ON no.run_id = rr.run_id
             INNER JOIN public_nodes n ON no.node_id = n.id
             INNER JOIN sessions s ON no.run_id = s.run_id
-            WHERE n.org_id = '{org_id}'
-                AND no.node_persistent_id = '{PEPSI_BROKER_NODE_ID}'
-                AND JSONHas(no.flat_data, 'result.call.call_stage') = 1
+            WHERE 1 = 1
+                AND no.node_persistent_id = '{node_persistent_id}'
                 AND JSONExtractString(no.flat_data, 'result.call.call_stage') != ''
                 AND JSONExtractString(no.flat_data, 'result.call.call_stage') != 'null'
-                AND s.user_number != '+19259898099'
             GROUP BY call_stage
         ),
         total_calls AS (
@@ -148,7 +146,12 @@ def calls_ending_in_each_call_stage_stats_query(date_filter: str, org_id: str, P
         ORDER BY css.count DESC
     """
 
-def load_not_found_stats_query(date_filter: str, org_id: str, PEPSI_BROKER_NODE_ID: str) -> str:
+def load_not_found_stats_query(
+    date_filter: str,
+    org_id: str,
+    node_persistent_id: str,
+    excluded_user_numbers_sql: str = "",
+) -> str:
 # percentage of calls where the load not found error is thrown
     return f"""
         WITH recent_runs AS (
@@ -161,6 +164,7 @@ def load_not_found_stats_query(date_filter: str, org_id: str, PEPSI_BROKER_NODE_
             FROM public_sessions
             WHERE {date_filter}
                 AND org_id = '{org_id}'
+                {excluded_user_numbers_sql}
         ),
         extracted AS (
             SELECT
@@ -170,9 +174,8 @@ def load_not_found_stats_query(date_filter: str, org_id: str, PEPSI_BROKER_NODE_
             INNER JOIN recent_runs rr ON no.run_id = rr.run_id
             INNER JOIN public_nodes n ON no.node_id = n.id
             INNER JOIN sessions s ON no.run_id = s.run_id
-            WHERE n.org_id = '{org_id}'
-                AND no.node_persistent_id = '{PEPSI_BROKER_NODE_ID}'
-                AND s.user_number != '+19259898099'
+            WHERE 1 = 1
+                AND no.node_persistent_id = '{node_persistent_id}'
         ),
     load_status_stats AS (
         SELECT
@@ -207,7 +210,12 @@ def load_not_found_stats_query(date_filter: str, org_id: str, PEPSI_BROKER_NODE_
     CROSS JOIN total_calls tc
         """
 
-def load_status_stats_query(date_filter: str, org_id: str, PEPSI_BROKER_NODE_ID: str) -> str:
+def load_status_stats_query(
+    date_filter: str,
+    org_id: str,
+    node_persistent_id: str,
+    excluded_user_numbers_sql: str = "",
+) -> str:
     return f"""
        WITH recent_runs AS (
         SELECT id AS run_id
@@ -219,7 +227,7 @@ def load_status_stats_query(date_filter: str, org_id: str, PEPSI_BROKER_NODE_ID:
         FROM public_sessions s
         INNER JOIN recent_runs rr ON s.run_id = rr.run_id
         WHERE s.org_id = '{org_id}'
-          AND s.user_number != '+19259898099'
+          {excluded_user_numbers_sql}
     ),
     extracted AS (
         SELECT
@@ -229,9 +237,8 @@ def load_status_stats_query(date_filter: str, org_id: str, PEPSI_BROKER_NODE_ID:
         INNER JOIN recent_runs rr ON no.run_id = rr.run_id
         INNER JOIN public_nodes n ON no.node_id = n.id
         INNER JOIN sessions s ON no.run_id = s.run_id
-        WHERE n.org_id = '{org_id}'
-          AND no.node_persistent_id = '{PEPSI_BROKER_NODE_ID}'
-          AND s.user_number != '+19259898099'
+        WHERE 1 = 1
+          AND no.node_persistent_id = '{node_persistent_id}'
     ),
     load_status_stats AS (
         SELECT
@@ -263,7 +270,12 @@ def load_status_stats_query(date_filter: str, org_id: str, PEPSI_BROKER_NODE_ID:
   
     """
 
-def successfully_transferred_for_booking_stats_query(date_filter: str, org_id: str, PEPSI_BROKER_NODE_ID: str) -> str:
+def successfully_transferred_for_booking_stats_query(
+    date_filter: str,
+    org_id: str,
+    node_persistent_id: str,
+    excluded_user_numbers_sql: str = "",
+) -> str:
     # percentage of calls where the transfer was successful for booking
     return f"""
         WITH recent_runs AS (
@@ -276,7 +288,7 @@ def successfully_transferred_for_booking_stats_query(date_filter: str, org_id: s
             FROM public_sessions
             WHERE {date_filter}
             AND org_id = '{org_id}'
-            AND user_number != '+19259898099'         
+            {excluded_user_numbers_sql}
         ),
         extracted AS (
             SELECT
@@ -288,8 +300,8 @@ def successfully_transferred_for_booking_stats_query(date_filter: str, org_id: s
             INNER JOIN recent_runs rr ON no.run_id = rr.run_id
             INNER JOIN public_nodes n ON no.node_id = n.id
             INNER JOIN sessions s ON no.run_id = s.run_id
-            WHERE n.org_id = '{org_id}'
-            AND no.node_persistent_id = '{PEPSI_BROKER_NODE_ID}'
+            WHERE 1 = 1
+            AND no.node_persistent_id = '{node_persistent_id}'
             AND JSONHas(no.flat_data, 'result.transfer.transfer_attempt') = 1
             AND JSONHas(no.flat_data, 'result.pricing.agreed_upon_rate') = 1
             AND JSONHas(no.flat_data, 'result.pricing.pricing_notes') = 1
@@ -340,7 +352,12 @@ def successfully_transferred_for_booking_stats_query(date_filter: str, org_id: s
             total_calls tc
     """
 
-def call_classifcation_stats_query(date_filter: str, org_id: str, PEPSI_BROKER_NODE_ID: str) -> str:
+def call_classifcation_stats_query(
+    date_filter: str,
+    org_id: str,
+    node_persistent_id: str,
+    excluded_user_numbers_sql: str = "",
+) -> str:
     # percentage of calls ending in each call stage
     return f"""
         WITH recent_runs AS (
@@ -352,6 +369,7 @@ def call_classifcation_stats_query(date_filter: str, org_id: str, PEPSI_BROKER_N
             SELECT run_id, user_number FROM public_sessions
             WHERE {date_filter}
             AND org_id = '{org_id}'
+            {excluded_user_numbers_sql}
         ),
         call_classification_stats AS (
             SELECT
@@ -361,12 +379,11 @@ def call_classifcation_stats_query(date_filter: str, org_id: str, PEPSI_BROKER_N
             INNER JOIN recent_runs rr ON no.run_id = rr.run_id
             INNER JOIN public_nodes n ON no.node_id = n.id
             INNER JOIN sessions s ON no.run_id = s.run_id
-            WHERE n.org_id = '{org_id}'
-            AND no.node_persistent_id = '{PEPSI_BROKER_NODE_ID}'
+            WHERE 1 = 1
+            AND no.node_persistent_id = '{node_persistent_id}'
             AND JSONHas(no.flat_data, 'result.call.call_classification') = 1
             AND JSONExtractString(no.flat_data, 'result.call.call_classification') != ''
             AND JSONExtractString(no.flat_data, 'result.call.call_classification') != 'null'
-            AND s.user_number != '+19259898099'
             GROUP BY call_classification
         ),
         total_calls AS (
@@ -450,7 +467,12 @@ def call_classifcation_stats_query(date_filter: str, org_id: str, PEPSI_BROKER_N
     # """
 
 
-def carrier_qualification_stats_query(date_filter: str, org_id: str, PEPSI_BROKER_NODE_ID: str) -> str:
+def carrier_qualification_stats_query(
+    date_filter: str,
+    org_id: str,
+    node_persistent_id: str,
+    excluded_user_numbers_sql: str = "",
+) -> str:
     # percentage of calls where the carrier was qualified
     return f"""
         WITH recent_runs AS (
@@ -462,6 +484,7 @@ def carrier_qualification_stats_query(date_filter: str, org_id: str, PEPSI_BROKE
             SELECT run_id, user_number FROM public_sessions
             WHERE {date_filter}
             AND org_id = '{org_id}'
+            {excluded_user_numbers_sql}
         ),
         carrier_qualification_stats AS (
             SELECT
@@ -471,12 +494,11 @@ def carrier_qualification_stats_query(date_filter: str, org_id: str, PEPSI_BROKE
             INNER JOIN recent_runs rr ON no.run_id = rr.run_id
             INNER JOIN public_nodes n ON no.node_id = n.id
             INNER JOIN sessions s ON no.run_id = s.run_id
-            WHERE n.org_id = '{org_id}'
-            AND no.node_persistent_id = '{PEPSI_BROKER_NODE_ID}'
+            WHERE 1 = 1
+            AND no.node_persistent_id = '{node_persistent_id}'
             AND JSONHas(no.flat_data, 'result.carrier.carrier_qualification') = 1
             AND JSONExtractString(no.flat_data, 'result.carrier.carrier_qualification') != ''
             AND JSONExtractString(no.flat_data, 'result.carrier.carrier_qualification') != 'null'
-            AND s.user_number != '+19259898099'
             GROUP BY carrier_qualification
         ),
         total_calls AS (
@@ -491,7 +513,12 @@ def carrier_qualification_stats_query(date_filter: str, org_id: str, PEPSI_BROKE
         ORDER BY cqs.count DESC
     """
 
-def pricing_stats_query(date_filter: str, org_id: str, PEPSI_BROKER_NODE_ID: str) -> str:
+def pricing_stats_query(
+    date_filter: str,
+    org_id: str,
+    node_persistent_id: str,
+    excluded_user_numbers_sql: str = "",
+) -> str:
     # pricing stats
     return f"""
         WITH recent_runs AS (
@@ -503,6 +530,7 @@ def pricing_stats_query(date_filter: str, org_id: str, PEPSI_BROKER_NODE_ID: str
         select run_id, user_number from public_sessions
         WHERE {date_filter}
         AND org_id = '{org_id}'
+        {excluded_user_numbers_sql}
         ),
         pricing_stats AS (
             SELECT
@@ -512,12 +540,11 @@ def pricing_stats_query(date_filter: str, org_id: str, PEPSI_BROKER_NODE_ID: str
             INNER JOIN recent_runs rr ON no.run_id = rr.run_id
             INNER JOIN public_nodes n ON no.node_id = n.id
             INNER JOIN sessions s ON no.run_id = s.run_id
-            WHERE n.org_id = '{org_id}'
-            AND no.node_persistent_id = '{PEPSI_BROKER_NODE_ID}'
+            WHERE 1 = 1
+            AND no.node_persistent_id = '{node_persistent_id}'
             AND JSONHas(no.flat_data, 'result.pricing.pricing_notes') = 1
             AND JSONExtractString(no.flat_data, 'result.pricing.pricing_notes') != ''
             AND JSONExtractString(no.flat_data, 'result.pricing.pricing_notes') != 'null'
-            AND s.user_number != '+19259898099'
             GROUP BY pricing_notes
         ),
         total_calls AS (
@@ -532,7 +559,12 @@ def pricing_stats_query(date_filter: str, org_id: str, PEPSI_BROKER_NODE_ID: str
         ORDER BY ps.count DESC
     """
 
-def carrier_end_state_query(date_filter: str, org_id: str, PEPSI_BROKER_NODE_ID: str) -> str:
+def carrier_end_state_query(
+    date_filter: str,
+    org_id: str,
+    node_persistent_id: str,
+    excluded_user_numbers_sql: str = "",
+) -> str:
     # pricing stats
     return f"""
         WITH recent_runs AS (
@@ -544,6 +576,7 @@ def carrier_end_state_query(date_filter: str, org_id: str, PEPSI_BROKER_NODE_ID:
         select run_id, user_number from public_sessions
         WHERE {date_filter}
         AND org_id = '{org_id}'
+        {excluded_user_numbers_sql}
         ),
         carrier_end_state_stats AS (
             SELECT
@@ -553,12 +586,11 @@ def carrier_end_state_query(date_filter: str, org_id: str, PEPSI_BROKER_NODE_ID:
             INNER JOIN recent_runs rr ON no.run_id = rr.run_id
             INNER JOIN public_nodes n ON no.node_id = n.id
             INNER JOIN sessions s ON no.run_id = s.run_id
-            WHERE n.org_id = '{org_id}'
-            AND no.node_persistent_id = '{PEPSI_BROKER_NODE_ID}'
+            WHERE 1 = 1
+            AND no.node_persistent_id = '{node_persistent_id}'
             AND JSONHas(no.flat_data, 'result.carrier.carrier_end_state') = 1
             AND JSONExtractString(no.flat_data, 'result.carrier.carrier_end_state') != ''
             AND JSONExtractString(no.flat_data, 'result.carrier.carrier_end_state') != 'null'
-            AND s.user_number != '+19259898099'
             GROUP BY carrier_end_state
         ),
         total_calls AS (
@@ -574,7 +606,12 @@ def carrier_end_state_query(date_filter: str, org_id: str, PEPSI_BROKER_NODE_ID:
     """
 # done above
 
-def percent_non_convertible_calls_query(date_filter: str, org_id: str, PEPSI_BROKER_NODE_ID: str) -> str:
+def percent_non_convertible_calls_query(
+    date_filter: str,
+    org_id: str,
+    node_persistent_id: str,
+    excluded_user_numbers_sql: str = "",
+) -> str:
     # percentage of non convertible calls
     return f"""
         WITH recent_runs AS (
@@ -588,7 +625,7 @@ def percent_non_convertible_calls_query(date_filter: str, org_id: str, PEPSI_BRO
             AND org_id = '{org_id}'
             AND isNotNull(user_number)
             AND user_number != ''
-            AND user_number != '+19259898099'
+            {excluded_user_numbers_sql}
         ),
         non_convertible_calls_stats AS (
             SELECT *
@@ -596,8 +633,8 @@ def percent_non_convertible_calls_query(date_filter: str, org_id: str, PEPSI_BRO
             INNER JOIN recent_runs rr ON no.run_id = rr.run_id
             INNER JOIN public_nodes n ON no.node_id = n.id
             INNER JOIN sessions s ON no.run_id = s.run_id
-            WHERE n.org_id = '{org_id}'
-            AND no.node_persistent_id = '{PEPSI_BROKER_NODE_ID}'
+            WHERE 1 = 1
+            AND no.node_persistent_id = '{node_persistent_id}'
             AND JSONHas(no.flat_data, 'result.call.call_classification') = 1
             AND JSONExtractString(no.flat_data, 'result.call.call_classification') != ''
             AND JSONExtractString(no.flat_data, 'result.call.call_classification') != 'null'
@@ -609,7 +646,6 @@ def percent_non_convertible_calls_query(date_filter: str, org_id: str, PEPSI_BRO
             OR JSONExtractString(no.flat_data, 'result.carrier.carrier_end_state') = 'CARRIER_DID_NOT_WANT_LOAD'
             OR JSONExtractString(no.flat_data, 'result.call.call_classification') = 'rate_too_high'
             )
-            AND s.user_number != '+19259898099'
         ),
         non_convertible_calls_count AS (
             SELECT SUM(1) AS non_convertible_calls_count FROM non_convertible_calls_stats
@@ -621,7 +657,193 @@ def percent_non_convertible_calls_query(date_filter: str, org_id: str, PEPSI_BRO
         FROM non_convertible_calls_count, total_calls
         """
 
-def number_of_unique_loads_query(date_filter: str, org_id: str, PEPSI_FBR_NODE_ID: str) -> str:
+def non_convertible_calls_with_carrier_not_qualified_query(
+    date_filter: str,
+    org_id: str,
+    node_persistent_id: str,
+    excluded_user_numbers_sql: str = "",
+) -> str:
+    """
+    Non-convertible calls INCLUDING carrier_not_qualified.
+    These are all calls that wouldn't have converted anyway (AI saved time).
+    """
+    return f"""
+        WITH recent_runs AS (
+            SELECT id AS run_id
+            FROM public_runs
+            WHERE {date_filter}
+        ),
+        sessions AS (
+            SELECT run_id, user_number FROM public_sessions
+            WHERE {date_filter}
+            AND org_id = '{org_id}'
+            AND isNotNull(user_number)
+            AND user_number != ''
+            {excluded_user_numbers_sql}
+        ),
+        non_convertible_calls_stats AS (
+            SELECT DISTINCT s.run_id
+            FROM public_node_outputs no
+            INNER JOIN recent_runs rr ON no.run_id = rr.run_id
+            INNER JOIN public_nodes n ON no.node_id = n.id
+            INNER JOIN sessions s ON no.run_id = s.run_id
+            WHERE no.node_persistent_id = '{node_persistent_id}'
+            AND JSONHas(no.flat_data, 'result.call.call_classification') = 1
+            AND JSONExtractString(no.flat_data, 'result.call.call_classification') IN (
+                'carrier_not_qualified',
+                'caller_hung_up_no_explanation',
+                'user_declined_load',
+                'carrier_cannot_see_reference_number',
+                'alternate_equipment',
+                'load_not_ready',
+                'load_past_due',
+                'covered',
+                'alternate_date_or_time',
+                'checking_with_driver',
+                'caller_put_on_hold_assistant_hung_up',
+                'rate_too_high'
+            )
+        ),
+        non_convertible_calls_count AS (
+            SELECT COUNT(*) AS non_convertible_calls_count FROM non_convertible_calls_stats
+        ),
+        total_calls AS (
+            SELECT COUNT(DISTINCT s.run_id) AS total_calls
+            FROM public_node_outputs no
+            INNER JOIN recent_runs rr ON no.run_id = rr.run_id
+            INNER JOIN sessions s ON no.run_id = s.run_id
+            WHERE no.node_persistent_id = '{node_persistent_id}'
+            AND JSONHas(no.flat_data, 'result.call.call_classification') = 1
+        )
+        SELECT
+            non_convertible_calls_count,
+            total_calls,
+            ROUND((non_convertible_calls_count * 100.0) / nullIf(total_calls, 0), 2) AS non_convertible_calls_percentage
+        FROM non_convertible_calls_count, total_calls
+        """
+
+def non_convertible_calls_without_carrier_not_qualified_query(
+    date_filter: str,
+    org_id: str,
+    node_persistent_id: str,
+    excluded_user_numbers_sql: str = "",
+) -> str:
+    """
+    Non-convertible calls EXCLUDING carrier_not_qualified.
+    These are calls with specific issues (equipment, timing, load status, etc).
+    """
+    return f"""
+        WITH recent_runs AS (
+            SELECT id AS run_id
+            FROM public_runs
+            WHERE {date_filter}
+        ),
+        sessions AS (
+            SELECT run_id, user_number FROM public_sessions
+            WHERE {date_filter}
+            AND org_id = '{org_id}'
+            AND isNotNull(user_number)
+            AND user_number != ''
+            {excluded_user_numbers_sql}
+        ),
+        non_convertible_calls_stats AS (
+            SELECT DISTINCT s.run_id
+            FROM public_node_outputs no
+            INNER JOIN recent_runs rr ON no.run_id = rr.run_id
+            INNER JOIN public_nodes n ON no.node_id = n.id
+            INNER JOIN sessions s ON no.run_id = s.run_id
+            WHERE no.node_persistent_id = '{node_persistent_id}'
+            AND JSONHas(no.flat_data, 'result.call.call_classification') = 1
+            AND JSONExtractString(no.flat_data, 'result.call.call_classification') IN (
+                'caller_hung_up_no_explanation',
+                'user_declined_load',
+                'carrier_cannot_see_reference_number',
+                'alternate_equipment',
+                'load_not_ready',
+                'load_past_due',
+                'covered',
+                'alternate_date_or_time',
+                'checking_with_driver',
+                'caller_put_on_hold_assistant_hung_up',
+                'rate_too_high'
+            )
+        ),
+        non_convertible_calls_count AS (
+            SELECT COUNT(*) AS non_convertible_calls_count FROM non_convertible_calls_stats
+        ),
+        total_calls AS (
+            SELECT COUNT(DISTINCT s.run_id) AS total_calls
+            FROM public_node_outputs no
+            INNER JOIN recent_runs rr ON no.run_id = rr.run_id
+            INNER JOIN sessions s ON no.run_id = s.run_id
+            WHERE no.node_persistent_id = '{node_persistent_id}'
+            AND JSONHas(no.flat_data, 'result.call.call_classification') = 1
+        )
+        SELECT
+            non_convertible_calls_count,
+            total_calls,
+            ROUND((non_convertible_calls_count * 100.0) / nullIf(total_calls, 0), 2) AS non_convertible_calls_percentage
+        FROM non_convertible_calls_count, total_calls
+        """
+
+def carrier_not_qualified_stats_query(
+    date_filter: str,
+    org_id: str,
+    node_persistent_id: str,
+    excluded_user_numbers_sql: str = "",
+) -> str:
+    """
+    Standalone metric for carrier_not_qualified calls.
+    These are carriers that didn't meet qualification requirements.
+    """
+    return f"""
+        WITH recent_runs AS (
+            SELECT id AS run_id
+            FROM public_runs
+            WHERE {date_filter}
+        ),
+        sessions AS (
+            SELECT run_id, user_number FROM public_sessions
+            WHERE {date_filter}
+            AND org_id = '{org_id}'
+            AND isNotNull(user_number)
+            AND user_number != ''
+            {excluded_user_numbers_sql}
+        ),
+        carrier_not_qualified_calls AS (
+            SELECT DISTINCT s.run_id
+            FROM public_node_outputs no
+            INNER JOIN recent_runs rr ON no.run_id = rr.run_id
+            INNER JOIN public_nodes n ON no.node_id = n.id
+            INNER JOIN sessions s ON no.run_id = s.run_id
+            WHERE no.node_persistent_id = '{node_persistent_id}'
+            AND JSONHas(no.flat_data, 'result.call.call_classification') = 1
+            AND JSONExtractString(no.flat_data, 'result.call.call_classification') = 'carrier_not_qualified'
+        ),
+        carrier_not_qualified_count AS (
+            SELECT COUNT(*) AS carrier_not_qualified_count FROM carrier_not_qualified_calls
+        ),
+        total_calls AS (
+            SELECT COUNT(DISTINCT s.run_id) AS total_calls
+            FROM public_node_outputs no
+            INNER JOIN recent_runs rr ON no.run_id = rr.run_id
+            INNER JOIN sessions s ON no.run_id = s.run_id
+            WHERE no.node_persistent_id = '{node_persistent_id}'
+            AND JSONHas(no.flat_data, 'result.call.call_classification') = 1
+        )
+        SELECT
+            carrier_not_qualified_count,
+            total_calls,
+            ROUND((carrier_not_qualified_count * 100.0) / nullIf(total_calls, 0), 2) AS carrier_not_qualified_percentage
+        FROM carrier_not_qualified_count, total_calls
+        """
+
+def number_of_unique_loads_query(
+    date_filter: str,
+    org_id: str,
+    node_persistent_id: str,
+    excluded_user_numbers_sql: str = "",
+) -> str:
     # number of unique loads
     return f"""
         WITH recent_runs AS (
@@ -636,7 +858,7 @@ def number_of_unique_loads_query(date_filter: str, org_id: str, PEPSI_FBR_NODE_I
             WHERE s.org_id = '{org_id}'
             AND isNotNull(s.user_number)
             AND s.user_number != ''
-            AND s.user_number != '+19259898099'
+            {excluded_user_numbers_sql}
         ),
         number_of_unique_loads_stats AS (
             SELECT uniqExact(JSONExtractString(no.flat_data, 'load.custom_load_id')) AS number_of_unique_loads
@@ -644,12 +866,11 @@ def number_of_unique_loads_query(date_filter: str, org_id: str, PEPSI_FBR_NODE_I
             INNER JOIN recent_runs rr ON no.run_id = rr.run_id
             INNER JOIN public_nodes n ON no.node_id = n.id
             INNER JOIN sessions s ON no.run_id = s.run_id
-            WHERE n.org_id = '{org_id}'
-            AND no.node_persistent_id = '{PEPSI_FBR_NODE_ID}'
+            WHERE 1 = 1
+            AND no.node_persistent_id = '{node_persistent_id}'
             AND JSONHas(no.flat_data, 'load.custom_load_id') = 1
             AND JSONExtractString(no.flat_data, 'load.custom_load_id') != ''
             AND JSONExtractString(no.flat_data, 'load.custom_load_id') != 'null'
-            AND s.user_number != '+19259898099'
         ),
         total_calls AS (
             SELECT SUM(1) AS total_calls FROM sessions
@@ -661,7 +882,12 @@ def number_of_unique_loads_query(date_filter: str, org_id: str, PEPSI_FBR_NODE_I
         FROM number_of_unique_loads_stats, total_calls
         """
 
-def list_of_unique_loads_query(date_filter: str, org_id: str, PEPSI_FBR_NODE_ID: str) -> str:
+def list_of_unique_loads_query(
+    date_filter: str,
+    org_id: str,
+    node_persistent_id: str,
+    excluded_user_numbers_sql: str = "",
+) -> str:
     # list of unique loads
     return f"""
         WITH recent_runs AS (
@@ -676,7 +902,7 @@ def list_of_unique_loads_query(date_filter: str, org_id: str, PEPSI_FBR_NODE_ID:
             WHERE s.org_id = '{org_id}'
             AND isNotNull(s.user_number)
             AND s.user_number != ''
-            AND s.user_number != '+19259898099'
+            {excluded_user_numbers_sql}
         ),
         list_of_unique_loads_stats AS (
             SELECT DISTINCT JSONExtractString(no.flat_data, 'load.custom_load_id') AS custom_load_id
@@ -684,17 +910,21 @@ def list_of_unique_loads_query(date_filter: str, org_id: str, PEPSI_FBR_NODE_ID:
             INNER JOIN recent_runs rr ON no.run_id = rr.run_id
             INNER JOIN public_nodes n ON no.node_id = n.id
             INNER JOIN sessions s ON no.run_id = s.run_id
-            WHERE n.org_id = '{org_id}'
-            AND no.node_persistent_id = '{PEPSI_FBR_NODE_ID}'
+            WHERE 1 = 1
+            AND no.node_persistent_id = '{node_persistent_id}'
             AND JSONHas(no.flat_data, 'load.custom_load_id') = 1
             AND JSONExtractString(no.flat_data, 'load.custom_load_id') != ''
             AND JSONExtractString(no.flat_data, 'load.custom_load_id') != 'null'
-            AND s.user_number != '+19259898099'
         )
         SELECT custom_load_id FROM list_of_unique_loads_stats
         """
 
-def number_of_unique_loads_query_broker_node(date_filter: str, org_id: str, PEPSI_BROKER_NODE_ID: str) -> str:
+def number_of_unique_loads_query_broker_node(
+    date_filter: str,
+    org_id: str,
+    node_persistent_id: str,
+    excluded_user_numbers_sql: str = "",
+) -> str:
     # number of unique loads
     return f"""
         WITH recent_runs AS (
@@ -709,7 +939,7 @@ def number_of_unique_loads_query_broker_node(date_filter: str, org_id: str, PEPS
             WHERE s.org_id = '{org_id}'
             AND isNotNull(s.user_number)
             AND s.user_number != ''
-            AND s.user_number != '+19259898099'
+            {excluded_user_numbers_sql}
         ),
         number_of_unique_loads_stats AS (
             SELECT uniqExact(JSONExtractString(no.flat_data, 'result.load.reference_number')) AS number_of_unique_loads
@@ -717,12 +947,11 @@ def number_of_unique_loads_query_broker_node(date_filter: str, org_id: str, PEPS
             INNER JOIN recent_runs rr ON no.run_id = rr.run_id
             INNER JOIN public_nodes n ON no.node_id = n.id
             INNER JOIN sessions s ON no.run_id = s.run_id
-            WHERE n.org_id = '{org_id}'
-            AND no.node_persistent_id = '{PEPSI_BROKER_NODE_ID}'
+            WHERE 1 = 1
+            AND no.node_persistent_id = '{node_persistent_id}'
             AND JSONHas(no.flat_data, 'result.load.reference_number') = 1
             AND JSONExtractString(no.flat_data, 'result.load.reference_number') != ''
             AND JSONExtractString(no.flat_data, 'result.load.reference_number') != 'null'
-            AND s.user_number != '+19259898099'
         ),
         total_calls AS (
             SELECT SUM(1) AS total_calls FROM sessions
@@ -734,7 +963,12 @@ def number_of_unique_loads_query_broker_node(date_filter: str, org_id: str, PEPS
         FROM number_of_unique_loads_stats, total_calls
         """
 
-def list_of_unique_loads_query_broker_node(date_filter: str, org_id: str, PEPSI_BROKER_NODE_ID: str) -> str:
+def list_of_unique_loads_query_broker_node(
+    date_filter: str,
+    org_id: str,
+    node_persistent_id: str,
+    excluded_user_numbers_sql: str = "",
+) -> str:
     # list of unique loads
     return f"""
         WITH recent_runs AS (
@@ -749,7 +983,7 @@ def list_of_unique_loads_query_broker_node(date_filter: str, org_id: str, PEPSI_
             WHERE s.org_id = '{org_id}'
             AND isNotNull(s.user_number)
             AND s.user_number != ''
-            AND s.user_number != '+19259898099'
+            {excluded_user_numbers_sql}
         ),
         list_of_unique_loads_stats AS (
             SELECT DISTINCT JSONExtractString(no.flat_data, 'result.load.reference_number') AS custom_load_id
@@ -757,12 +991,11 @@ def list_of_unique_loads_query_broker_node(date_filter: str, org_id: str, PEPSI_
             INNER JOIN recent_runs rr ON no.run_id = rr.run_id
             INNER JOIN public_nodes n ON no.node_id = n.id
             INNER JOIN sessions s ON no.run_id = s.run_id
-            WHERE n.org_id = '{org_id}'
-            AND no.node_persistent_id = '{PEPSI_BROKER_NODE_ID}'
+            WHERE 1 = 1
+            AND no.node_persistent_id = '{node_persistent_id}'
             AND JSONHas(no.flat_data, 'result.load.reference_number') = 1
             AND JSONExtractString(no.flat_data, 'result.load.reference_number') != ''
             AND JSONExtractString(no.flat_data, 'result.load.reference_number') != 'null'
-            AND s.user_number != '+19259898099'
         )
         SELECT custom_load_id FROM list_of_unique_loads_stats
         """
@@ -904,7 +1137,10 @@ def list_of_unique_loads_query_broker_node(date_filter: str, org_id: str, PEPSI_
 #         """
 
 def calls_without_carrier_asked_for_transfer_query(
-    date_filter: str, org_id: str, PEPSI_BROKER_NODE_ID: str
+    date_filter: str,
+    org_id: str,
+    node_persistent_id: str,
+    excluded_user_numbers_sql: str = "",
 ) -> str:
     # calls without carrier asked for transfer (optimized)
     return f"""
@@ -919,7 +1155,7 @@ def calls_without_carrier_asked_for_transfer_query(
             FROM public_sessions
             WHERE {date_filter}
               AND org_id = '{org_id}'
-              AND user_number != '+19259898099'
+              {excluded_user_numbers_sql}
         ),
 
         -- Runs that have transfer_reason set & not carrier_asked_for_transfer
@@ -929,8 +1165,8 @@ def calls_without_carrier_asked_for_transfer_query(
             INNER JOIN recent_runs rr ON no.run_id = rr.run_id
             INNER JOIN public_nodes n ON no.node_id = n.id
             INNER JOIN sessions s ON no.run_id = s.run_id
-            WHERE n.org_id = '{org_id}'
-              AND no.node_persistent_id = '{PEPSI_BROKER_NODE_ID}'
+            WHERE 1 = 1
+              AND no.node_persistent_id = '{node_persistent_id}'
               AND JSONHas(no.flat_data, 'result.transfer.transfer_reason') = 1
               AND JSONExtractString(no.flat_data, 'result.transfer.transfer_reason') != ''
               AND JSONExtractString(no.flat_data, 'result.transfer.transfer_reason') != 'null'
@@ -967,8 +1203,8 @@ def calls_without_carrier_asked_for_transfer_query(
             INNER JOIN public_nodes n ON no.node_id = n.id
             INNER JOIN sessions s ON no.run_id = s.run_id
             INNER JOIN eligible_runs er ON no.run_id = er.run_id
-            WHERE n.org_id = '{org_id}'
-              AND no.node_persistent_id = '{PEPSI_BROKER_NODE_ID}'
+            WHERE 1 = 1
+              AND no.node_persistent_id = '{node_persistent_id}'
               AND JSONHas(no.flat_data, 'result.call.call_classification') = 1
             GROUP BY
                 no.run_id,
@@ -1097,7 +1333,12 @@ def calls_without_carrier_asked_for_transfer_query(
 
 
 
-def total_calls_and_total_duration_query(date_filter: str, org_id: str, PEPSI_BROKER_NODE_ID: str) -> str:
+def total_calls_and_total_duration_query(
+    date_filter: str,
+    org_id: str,
+    node_persistent_id: str,
+    excluded_user_numbers_sql: str = "",
+) -> str:
     # total calls and total duration
     return f"""
        WITH recent_runs AS (
@@ -1110,11 +1351,11 @@ def total_calls_and_total_duration_query(date_filter: str, org_id: str, PEPSI_BR
         FROM public_sessions
         WHERE {date_filter}
         AND org_id = '{org_id}'
-        AND user_number != '+19259898099'
+        {excluded_user_numbers_sql}
     ),
     total_calls_and_total_duration_stats AS (
         SELECT
-            sum(duration) AS total_duration,
+            ifNull(sum(duration), 0) AS total_duration,
             count()      AS total_calls
         FROM (
             SELECT DISTINCT
@@ -1123,18 +1364,23 @@ def total_calls_and_total_duration_query(date_filter: str, org_id: str, PEPSI_BR
             FROM sessions s
             INNER JOIN public_node_outputs no
                 ON s.run_id = no.run_id
-            WHERE no.node_persistent_id = '{PEPSI_BROKER_NODE_ID}'
+            WHERE no.node_persistent_id = '{node_persistent_id}'
         )
     )
     SELECT
         total_duration,
         total_calls,
-        (total_duration / total_calls) / 60 AS avg_minutes_per_call
+        ifNull(round((total_duration / nullIf(total_calls, 0)) / 60, 2), 0) AS avg_minutes_per_call
     FROM total_calls_and_total_duration_stats;
 
         """
 
-def duration_carrier_asked_for_transfer_query(date_filter: str, org_id: str, PEPSI_BROKER_NODE_ID: str) -> str:
+def duration_carrier_asked_for_transfer_query(
+    date_filter: str,
+    org_id: str,
+    node_persistent_id: str,
+    excluded_user_numbers_sql: str = "",
+) -> str:
     # duration of carrier asked for transfer
     return f"""
         WITH recent_runs AS (
@@ -1147,7 +1393,7 @@ def duration_carrier_asked_for_transfer_query(date_filter: str, org_id: str, PEP
             FROM public_sessions
             WHERE {date_filter}
               AND org_id = '{org_id}'
-              AND user_number != '+19259898099'
+              {excluded_user_numbers_sql}
         ),
         carrier_asked_sessions AS (
             SELECT DISTINCT s.run_id as run_id, s.duration as duration
@@ -1155,8 +1401,8 @@ def duration_carrier_asked_for_transfer_query(date_filter: str, org_id: str, PEP
             INNER JOIN recent_runs rr ON s.run_id = rr.run_id
             INNER JOIN public_node_outputs no ON s.run_id = no.run_id
             INNER JOIN public_nodes n ON no.node_id = n.id
-            WHERE n.org_id = '{org_id}'
-              AND no.node_persistent_id = '{PEPSI_BROKER_NODE_ID}'
+            WHERE 1 = 1
+              AND no.node_persistent_id = '{node_persistent_id}'
               AND JSONHas(no.flat_data, 'result.transfer.transfer_reason') = 1
               AND JSONExtractString(no.flat_data, 'result.transfer.transfer_reason') != ''
               AND JSONExtractString(no.flat_data, 'result.transfer.transfer_reason') != 'null'

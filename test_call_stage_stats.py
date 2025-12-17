@@ -4,9 +4,10 @@ Example requests for the call-stage-stats endpoint
 
 import requests
 from datetime import datetime, timedelta
+import os
 
 # Base URL - adjust if your server is running on a different host/port
-BASE_URL = "http://localhost:8000"
+BASE_URL = os.getenv("BASE_URL", "http://localhost:8000")
 
 
 def get_call_stage_stats_without_dates():
@@ -53,9 +54,8 @@ if __name__ == "__main__":
     get_call_stage_stats_last_7_days()
     
     print("\n=== Example 3: Get stats for specific date range ===")
-    # Example: January 2024
-    get_call_stage_stats_with_dates(
-        start_date="2024-01-01T00:00:00",
-        end_date="2024-01-31T23:59:59"
-    )
+    # Example: last 24 hours (explicit range)
+    end = datetime.now().isoformat()
+    start = (datetime.now() - timedelta(days=1)).isoformat()
+    get_call_stage_stats_with_dates(start_date=start, end_date=end)
 

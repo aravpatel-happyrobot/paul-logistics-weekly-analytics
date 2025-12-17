@@ -1,0 +1,19 @@
+# Railway deployment configuration for Paul Logistics Dashboard Frontend
+# Documentation: https://docs.railway.app/reference/config-as-code
+
+[build]
+# Use the Dockerfile for building
+builder = "DOCKERFILE"
+dockerfilePath = "./Dockerfile"
+
+[deploy]
+# Number of instances to run
+numReplicas = 1
+
+# Health check configuration (Next.js should respond on /)
+healthcheckPath = "/"
+healthcheckTimeout = 30
+
+# Restart policy
+restartPolicyType = "ON_FAILURE"
+restartPolicyMaxRetries = 5
