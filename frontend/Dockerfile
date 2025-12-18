@@ -12,7 +12,11 @@ RUN npm ci
 # Copy source code
 COPY . .
 
-# Build the application
+# Accept build argument for API URL (Railway passes this from env vars)
+ARG NEXT_PUBLIC_API_URL
+ENV NEXT_PUBLIC_API_URL=$NEXT_PUBLIC_API_URL
+
+# Build the application (NEXT_PUBLIC_* vars are baked in here)
 RUN npm run build
 
 # Production image
