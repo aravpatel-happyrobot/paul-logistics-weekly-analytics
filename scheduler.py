@@ -348,7 +348,8 @@ def run_catchup_job():
         total_generated = 0
 
         for org in organizations:
-            missing_dates = get_missing_report_dates(org.org_id, days_back=catchup_days)
+            # Pass org's timezone to ensure we only look for completed days
+            missing_dates = get_missing_report_dates(org.org_id, days_back=catchup_days, timezone=org.timezone)
 
             if not missing_dates:
                 logger.info("No missing reports for %s in the last %d days", org.name, catchup_days)

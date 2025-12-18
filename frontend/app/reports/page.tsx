@@ -1,15 +1,14 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import { fetchReports, generateReport, type ReportSummary } from "@/lib/api";
+import { fetchReports, type ReportSummary } from "@/lib/api";
 import { formatPercent, formatNumber, formatDate } from "@/lib/utils";
-import { RefreshCw, FileText } from "lucide-react";
+import { FileText } from "lucide-react";
 import { TableSkeleton, ErrorState } from "@/components";
 
 export default function ReportsPage() {
   const [reports, setReports] = useState<ReportSummary[]>([]);
   const [loading, setLoading] = useState(true);
-  const [generating, setGenerating] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
   const loadReports = async () => {
@@ -29,18 +28,6 @@ export default function ReportsPage() {
     loadReports();
   }, []);
 
-  const handleGenerateReport = async () => {
-    try {
-      setGenerating(true);
-      await generateReport();
-      await loadReports();
-    } catch (err) {
-      setError(err instanceof Error ? err.message : "Failed to generate report");
-    } finally {
-      setGenerating(false);
-    }
-  };
-
   if (loading) {
     return (
       <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
@@ -56,19 +43,9 @@ export default function ReportsPage() {
   return (
     <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8 space-y-6">
       {/* Header */}
-      <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4">
-        <div>
-          <h2 className="text-3xl font-bold text-gray-900">Historical Reports</h2>
-          <p className="text-gray-500 mt-1">View and manage daily analytics reports</p>
-        </div>
-        <button
-          onClick={handleGenerateReport}
-          disabled={generating}
-          className="inline-flex items-center gap-2 px-5 py-2.5 gradient-primary text-white font-medium rounded-xl hover:opacity-90 transition-opacity shadow-lg shadow-indigo-500/30 disabled:opacity-50"
-        >
-          <RefreshCw className={`w-4 h-4 ${generating ? "animate-spin" : ""}`} />
-          {generating ? "Generating..." : "Generate New Report"}
-        </button>
+      <div>
+        <h2 className="text-3xl font-bold text-gray-900">Historical Reports</h2>
+        <p className="text-gray-500 mt-1">Daily analytics reports generated automatically at 6:00 AM Pacific</p>
       </div>
 
       {error && (
@@ -84,8 +61,8 @@ export default function ReportsPage() {
           </div>
           <h3 className="text-xl font-bold text-gray-900 mb-2">No Reports Available</h3>
           <p className="text-gray-500 max-w-md mx-auto">
-            No daily reports have been generated yet. Click the button above to generate
-            yesterday&apos;s report.
+            Reports are generated automatically every day at 6:00 AM Pacific Time.
+            Check back tomorrow to see yesterday&apos;s analytics.
           </p>
         </div>
       ) : (

@@ -5,7 +5,6 @@ import { AreaChart, DonutChart, BarList } from "@tremor/react";
 import {
   fetchLatestReport,
   fetchReports,
-  generateReport,
   fetchSchedulerStatus,
   type DailyReport,
   type ReportSummary,
@@ -36,11 +35,10 @@ import {
   Phone,
   Clock,
   CheckCircle2,
-  ArrowRight,
-  RefreshCw,
   Calendar,
   PhoneOff,
   Download,
+  ArrowRight,
 } from "lucide-react";
 
 // Metric definitions for tooltips
@@ -65,7 +63,6 @@ export default function Dashboard() {
   const [recentReports, setRecentReports] = useState<ReportSummary[]>([]);
   const [schedulerStatus, setSchedulerStatus] = useState<SchedulerStatus | null>(null);
   const [loading, setLoading] = useState(true);
-  const [generating, setGenerating] = useState(false);
   const [downloading, setDownloading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const reportRef = useRef<HTMLDivElement>(null);
@@ -108,18 +105,6 @@ export default function Dashboard() {
     loadData();
   }, []);
 
-  const handleGenerateReport = async () => {
-    try {
-      setGenerating(true);
-      await generateReport();
-      await loadData();
-    } catch (err) {
-      setError(err instanceof Error ? err.message : "Failed to generate report");
-    } finally {
-      setGenerating(false);
-    }
-  };
-
   const handleDownloadPDF = async () => {
     if (!reportRef.current || !report) return;
 
@@ -159,26 +144,10 @@ export default function Dashboard() {
             <Calendar className="w-10 h-10 text-white" />
           </div>
           <h2 className="text-2xl font-bold text-gray-900 mb-2">No Reports Yet</h2>
-          <p className="text-gray-500 mb-8 max-w-md mx-auto">
-            Generate your first daily report to see analytics for yesterday&apos;s calls.
+          <p className="text-gray-500 max-w-md mx-auto">
+            Reports are generated automatically every day at 6:00 AM Pacific Time.
+            Check back tomorrow to see yesterday&apos;s analytics.
           </p>
-          <button
-            onClick={handleGenerateReport}
-            disabled={generating}
-            className="inline-flex items-center gap-2 px-8 py-4 gradient-primary text-white font-semibold rounded-xl hover:opacity-90 transition-opacity shadow-lg shadow-indigo-500/30 disabled:opacity-50"
-          >
-            {generating ? (
-              <>
-                <RefreshCw className="w-5 h-5 animate-spin" />
-                Generating...
-              </>
-            ) : (
-              <>
-                Generate First Report
-                <ArrowRight className="w-5 h-5" />
-              </>
-            )}
-          </button>
         </div>
       </div>
     );
@@ -228,24 +197,14 @@ export default function Dashboard() {
             </p>
           )}
         </div>
-        <div className="flex gap-3">
-          <button
-            onClick={handleDownloadPDF}
-            disabled={downloading}
-            className="inline-flex items-center gap-2 px-5 py-2.5 gradient-primary text-white font-medium rounded-xl hover:opacity-90 transition-all shadow-lg shadow-indigo-500/30 disabled:opacity-50"
-          >
-            <Download className={`w-4 h-4 ${downloading ? "animate-pulse" : ""}`} />
-            {downloading ? "Generating..." : "Download Report"}
-          </button>
-          <button
-            onClick={handleGenerateReport}
-            disabled={generating}
-            className="inline-flex items-center gap-2 px-5 py-2.5 bg-white border border-gray-200 text-gray-700 font-medium rounded-xl hover:bg-gray-50 hover:border-gray-300 transition-all card-shadow disabled:opacity-50"
-          >
-            <RefreshCw className={`w-4 h-4 ${generating ? "animate-spin" : ""}`} />
-            {generating ? "Refreshing..." : "Refresh Data"}
-          </button>
-        </div>
+        <button
+          onClick={handleDownloadPDF}
+          disabled={downloading}
+          className="inline-flex items-center gap-2 px-5 py-2.5 gradient-primary text-white font-medium rounded-xl hover:opacity-90 transition-all shadow-lg shadow-indigo-500/30 disabled:opacity-50"
+        >
+          <Download className={`w-4 h-4 ${downloading ? "animate-pulse" : ""}`} />
+          {downloading ? "Generating..." : "Download Report"}
+        </button>
       </div>
 
       {/* Report Content - wrapped for PDF capture */}

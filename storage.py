@@ -583,14 +583,21 @@ def get_database_info() -> Dict:
 # Catch-up Logic
 # =============================================================================
 
-def get_missing_report_dates(org_id: str, days_back: int = 7) -> List[str]:
+def get_missing_report_dates(org_id: str, days_back: int = 7, timezone: str = "America/Los_Angeles") -> List[str]:
     """
     Find dates in the last N days that don't have reports.
     Used for catch-up logic on startup.
+
+    Important: Uses the organization's timezone to determine "today" so we only
+    generate reports for completed days (yesterday and before in that timezone).
     """
     from datetime import datetime, timedelta
+    from zoneinfo import ZoneInfo
 
-    today = datetime.now().date()
+    # Use the org's timezone to determine what "today" is
+    # This ensures we don't generate reports for days that haven't finished yet
+    tz = ZoneInfo(timezone)
+    today = datetime.now(tz).date()
     expected_dates = set()
 
     for i in range(1, days_back + 1):  # Start from 1 (yesterday) to days_back
