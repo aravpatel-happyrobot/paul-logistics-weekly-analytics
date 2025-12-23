@@ -8,7 +8,6 @@ import { generatePDFFromElement } from "@/lib/pdf";
 import { Phone, Clock, CheckCircle2, ArrowLeft, PhoneOff, Calendar, Download } from "lucide-react";
 import {
   MetricCard,
-  StatRow,
   BreakdownCard,
   ReportDetailSkeleton,
   ErrorState,
@@ -16,22 +15,10 @@ import {
 
 // Metric definitions for tooltips
 const TOOLTIPS = {
-  // KPI cards
   totalCalls: "Total number of calls received during this period",
-  successRate: "Percentage of calls where the carrier accepted the load. This includes both AI-completed bookings AND transfers to human agents. It measures overall booking success, not just transfers.",
-  nonConvertible: "Calls that couldn't result in a booking. Includes: carrier not qualified, user declined load, rate too high, and other unsuccessful outcomes",
+  bookingRate: "Percentage of calls that were successfully transferred and resulted in a booking",
+  nonConvertible: "Calls that couldn't result in a booking - carrier not qualified, declined load, rate issues, etc.",
   avgDuration: "Average length of each call in minutes",
-
-  // Transfer metrics
-  carrierNotQualified: "Carrier didn't meet requirements for the load (wrong equipment type, outside service area, capacity issues, etc.)",
-  transferRequestsAll: "Percentage of ALL calls where the carrier requested to speak with a human representative",
-  transferRequestsOfTransfers: "Of calls that attempted a transfer, the percentage where the carrier specifically requested it. Higher % means carriers are proactively asking for human help.",
-  successfullyTransferred: "Calls that were handed off to a human booking agent. This is different from Success Rate - a call can be successful without a transfer (AI completes it) or transferred without success (agent couldn't complete booking).",
-
-  // Non-convertible breakdown
-  nonConvertibleWithCNQ: "Non-convertible calls INCLUDING those where carrier was not qualified. This is the broadest measure of unsuccessful calls.",
-  nonConvertibleWithoutCNQ: "Non-convertible calls EXCLUDING carrier not qualified. These are calls that failed for reasons other than carrier qualification (rate issues, load declined, etc.)",
-  carrierNotQualifiedOnly: "Calls that ended specifically because the carrier didn't meet the load requirements",
 };
 
 export default function ReportDetailPage() {
@@ -184,12 +171,12 @@ export default function ReportDetailPage() {
             tooltip={TOOLTIPS.totalCalls}
           />
           <MetricCard
-            title="Success Rate"
-            value={formatPercent(kpis.success_rate_percent)}
-            subtitle={`${kpis.successfully_transferred_for_booking?.successfully_transferred_for_booking_count || 0} transferred`}
+            title="Booking Rate"
+            value={formatPercent(kpis.successfully_transferred_for_booking?.successfully_transferred_for_booking_percentage)}
+            subtitle={`${kpis.successfully_transferred_for_booking?.successfully_transferred_for_booking_count || 0} loads booked`}
             icon={CheckCircle2}
             gradient="gradient-success"
-            tooltip={TOOLTIPS.successRate}
+            tooltip={TOOLTIPS.bookingRate}
           />
           <MetricCard
             title="Non-Convertible"
@@ -207,70 +194,6 @@ export default function ReportDetailPage() {
             gradient="gradient-info"
             tooltip={TOOLTIPS.avgDuration}
           />
-        </div>
-
-        {/* Detailed Stats */}
-        <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-          <div className="bg-white rounded-2xl card-shadow-lg p-6">
-            <h3 className="text-lg font-semibold text-gray-900 mb-4">Transfer Metrics</h3>
-            <div className="space-y-1">
-              <StatRow
-                label="Carrier Not Qualified"
-                value={kpis.carrier_not_qualified?.count || 0}
-                total={kpis.classified_calls}
-                percentage={kpis.carrier_not_qualified?.percentage || 0}
-                tooltip={TOOLTIPS.carrierNotQualified}
-              />
-              <StatRow
-                label="Transfer Requests (of all calls)"
-                value={kpis.carrier_transfer_over_total_call_attempts?.carrier_asked_count || 0}
-                total={kpis.carrier_transfer_over_total_call_attempts?.total_call_attempts || 0}
-                percentage={kpis.carrier_transfer_over_total_call_attempts?.carrier_asked_percentage || 0}
-                tooltip={TOOLTIPS.transferRequestsAll}
-              />
-              <StatRow
-                label="Transfer Requests (of transfers)"
-                value={kpis.carrier_transfer_over_total_transfer_attempts?.carrier_asked_count || 0}
-                total={kpis.carrier_transfer_over_total_transfer_attempts?.total_transfer_attempts || 0}
-                percentage={kpis.carrier_transfer_over_total_transfer_attempts?.carrier_asked_percentage || 0}
-                tooltip={TOOLTIPS.transferRequestsOfTransfers}
-              />
-              <StatRow
-                label="Successfully Transferred"
-                value={kpis.successfully_transferred_for_booking?.successfully_transferred_for_booking_count || 0}
-                total={kpis.successfully_transferred_for_booking?.total_calls || 0}
-                percentage={kpis.successfully_transferred_for_booking?.successfully_transferred_for_booking_percentage || 0}
-                tooltip={TOOLTIPS.successfullyTransferred}
-              />
-            </div>
-          </div>
-
-          <div className="bg-white rounded-2xl card-shadow-lg p-6">
-            <h3 className="text-lg font-semibold text-gray-900 mb-4">Non-Convertible Breakdown</h3>
-            <div className="space-y-1">
-              <StatRow
-                label="With Carrier Not Qualified"
-                value={kpis.non_convertible_calls_with_carrier_not_qualified?.count || 0}
-                total={kpis.non_convertible_calls_with_carrier_not_qualified?.total_calls || 0}
-                percentage={kpis.non_convertible_calls_with_carrier_not_qualified?.percentage || 0}
-                tooltip={TOOLTIPS.nonConvertibleWithCNQ}
-              />
-              <StatRow
-                label="Without Carrier Not Qualified"
-                value={kpis.non_convertible_calls_without_carrier_not_qualified?.count || 0}
-                total={kpis.non_convertible_calls_without_carrier_not_qualified?.total_calls || 0}
-                percentage={kpis.non_convertible_calls_without_carrier_not_qualified?.percentage || 0}
-                tooltip={TOOLTIPS.nonConvertibleWithoutCNQ}
-              />
-              <StatRow
-                label="Carrier Not Qualified Only"
-                value={kpis.carrier_not_qualified?.count || 0}
-                total={kpis.carrier_not_qualified?.total_calls || 0}
-                percentage={kpis.carrier_not_qualified?.percentage || 0}
-                tooltip={TOOLTIPS.carrierNotQualifiedOnly}
-              />
-            </div>
-          </div>
         </div>
 
       {/* Breakdown Charts */}

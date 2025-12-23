@@ -44,16 +44,12 @@ import {
 // Metric definitions for tooltips
 const TOOLTIPS = {
   totalCalls: "Total number of calls received during this period",
-  successRate: "Percentage of calls where the carrier accepted the load. Includes both AI-completed bookings AND transfers to human agents. Measures overall booking success.",
-  nonConvertible: "Calls that couldn't result in a booking - includes carrier not qualified, user declined load, rate too high, and other unsuccessful outcomes",
+  bookingRate: "Percentage of calls that were successfully transferred and resulted in a booking",
+  nonConvertible: "Calls that couldn't result in a booking - carrier not qualified, declined load, rate issues, etc.",
   avgDuration: "Average length of each call in minutes",
-  carrierNotQualified: "Calls where the carrier didn't meet the qualification requirements for the load",
-  transferRequests: "Calls where the carrier requested to be transferred to a human representative",
-  successfullyTransferred: "Calls handed off to a human agent. Different from Success Rate - calls can succeed without transfer (AI completes) or be transferred without success.",
 };
 import {
   MetricCard,
-  StatCard,
   DashboardSkeleton,
   ErrorState,
 } from "@/components";
@@ -220,12 +216,12 @@ export default function Dashboard() {
           tooltip={TOOLTIPS.totalCalls}
         />
         <MetricCard
-          title="Success Rate"
-          value={formatPercent(kpis.success_rate_percent)}
-          subtitle={`${kpis.successfully_transferred_for_booking?.successfully_transferred_for_booking_count || 0} transferred`}
+          title="Booking Rate"
+          value={formatPercent(kpis.successfully_transferred_for_booking?.successfully_transferred_for_booking_percentage)}
+          subtitle={`${kpis.successfully_transferred_for_booking?.successfully_transferred_for_booking_count || 0} loads booked`}
           icon={CheckCircle2}
           gradient="gradient-success"
-          tooltip={TOOLTIPS.successRate}
+          tooltip={TOOLTIPS.bookingRate}
         />
         <MetricCard
           title="Non-Convertible"
@@ -242,34 +238,6 @@ export default function Dashboard() {
           icon={Clock}
           gradient="gradient-info"
           tooltip={TOOLTIPS.avgDuration}
-        />
-      </div>
-
-      {/* Secondary Stats */}
-      <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
-        <StatCard
-          label="Carrier Not Qualified"
-          value={kpis.carrier_not_qualified?.count || 0}
-          total={kpis.classified_calls}
-          percentage={kpis.carrier_not_qualified?.percentage || 0}
-          color="amber"
-          tooltip={TOOLTIPS.carrierNotQualified}
-        />
-        <StatCard
-          label="Transfer Requests"
-          value={kpis.carrier_transfer_over_total_call_attempts?.carrier_asked_count || 0}
-          total={kpis.carrier_transfer_over_total_call_attempts?.total_call_attempts || 0}
-          percentage={kpis.carrier_transfer_over_total_call_attempts?.carrier_asked_percentage || 0}
-          color="indigo"
-          tooltip={TOOLTIPS.transferRequests}
-        />
-        <StatCard
-          label="Successfully Transferred"
-          value={kpis.successfully_transferred_for_booking?.successfully_transferred_for_booking_count || 0}
-          total={kpis.successfully_transferred_for_booking?.total_calls || 0}
-          percentage={kpis.successfully_transferred_for_booking?.successfully_transferred_for_booking_percentage || 0}
-          color="emerald"
-          tooltip={TOOLTIPS.successfullyTransferred}
         />
       </div>
 
